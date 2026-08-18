@@ -2,7 +2,7 @@
 
 ## 短
 
-DeepSeek Harness 的飞书前端。没有网页，没有 TUI。斜杠命令、模型热切换、进度卡片、Goal、多 bot、重启续聊，全部在飞书里。
+Harness 长在飞书里，不是飞书遥控网页。给 Linux 服务器用，不是笔记本扫码版。Goal、一进程多 bot、会变的进度头。
 
 ```
 dsh plugin --profile feishu add github:shoxiy-danny/dsh-feishu
@@ -10,16 +10,18 @@ dsh plugin --profile feishu add github:shoxiy-danny/dsh-feishu
 
 ## 稍长
 
-dsh 官方面是 Web。dsh-feishu 把它换成一条飞书长连接：一个常驻进程，飞书进、飞书出。
+插件市场里 feishu / lark 已经三十多个。多数是通知器、多 IM 网关，或挂在官方网页旁边的桥。飞书只是遥控器，网页还在。不少还默认你坐在个人 PC 前，终端里弹二维码，手机扫一下就建好应用。
 
-和「外面 webhook、里面再 spawn 一次 CLI」不同。这是 Cordis 插件，create / followup / steer / cancel / resume 都在同一进程。补一句会并进当前轮，`/stop` 立刻停，进度卡片自己改，重启回到刚才那条会话。
+dsh-feishu 是跑在飞书里的 harness，部署面是 Linux 服务器。一个 `dsh --profile feishu` 当守护进程，日志进文件，没有要人盯着的 TTY。首个 bot 在开放平台建好、凭据写进环境变量再启动——无头机器上没处可贴码。已经通了的 bot 再开第二个，码可以打回飞书，那是后话。
 
-适合已经在飞书办公、想把 coding agent 做成 7×24 同事的人。不适合还想留官方网页、或只把飞书当通知渠道的人。
+不跟货架比按钮：没有打字机答案卡，没有卡内批准。要比的是长在飞书里（不是遥控网页）、Goal（重启不偷跑）、一进程多 bot、进度头 `[dsf-23% G1/3]`。
+
+GitHub 上另有 `PGZXB/dsh-feishu`，飞书控制台 + 卡内审批，官方 Web 还在。owner 不同。
 
 文档：<https://github.com/shoxiy-danny/dsh-feishu>
 
 ## 市场页 description（中英）
 
-Feishu / Lark as the only UI for DeepSeek Harness. No web app. Slash commands, live progress, Goal loops, multi-bot, resume after restart.
+The harness lives in Feishu, on a Linux server — not a remote for the webpage, not a laptop QR setup. Goal loops, multi-bot, a live progress header.
 
-DeepSeek Harness 的飞书前端。没有网页。斜杠命令、进度卡片、Goal、多 bot、重启续聊，全部发生在飞书里。
+Harness 长在飞书里，给 Linux 服务器用。不是遥控网页，也不是笔记本扫码版。Goal、一进程多 bot、会变的进度头。
