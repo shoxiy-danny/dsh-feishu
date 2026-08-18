@@ -113,8 +113,16 @@ export function createLark(creds = process.env) {
     }
   }
 
-  function start(onInbound) {
+  function start(onInbound, { onCard } = {}) {
     const eventDispatcher = new lark.EventDispatcher({}).register({
+      'card.action.trigger': async (data) => {
+        try {
+          if (!onCard) return
+          return await onCard(data)
+        } catch (err) {
+          process.stderr.write(`[dsh-feishu] card action failed: ${err}\n`)
+        }
+      },
       'im.message.receive_v1': async (data) => {
         try {
           const event = data.event ?? data

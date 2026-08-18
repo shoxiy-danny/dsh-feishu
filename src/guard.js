@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, resolve } from 'node:path'
+import { approvalCard, lockedCard, waitCard } from './cards.js'
 
 const DENY =
-  'Blocked a high-risk command. Name a specific path and retry, or say delete explicitly. Single-file and skill edits are fine.'
+  'Blocked a high-risk command. Tap Allow once on the Feishu card. Typing yes does not approve. Single-file and skill edits are fine.'
 
 const HOME = homedir().replace(/\/+$/, '')
 
@@ -24,18 +26,6 @@ const DROP_DB = /\b(?:drop\s+database|drop\s+schema|truncate\s+table)\b/i
 const FORCE_PUSH = /\bgit\s+push\b[\s\S]{0,60}(?:--force|--force-with-lease|-f)\b/
 const GIT_PUSH_DELETE = /\bgit\s+push\b[\s\S]{0,40}--delete\b/
 const KILL_SELF = /\b(?:pkill|killall|kill)\b[\s\S]{0,40}(?:\bdsh\b|\bfeishu\b)/
-
-const grants = new WeakMap()
-
-function grantOf(agent) {
-  if (!agent) return new Set()
-  let set = grants.get(agent)
-  if (!set) {
-    set = new Set()
-    grants.set(agent, set)
-  }
-  return set
-}
 
 function stripQuotes(token) {
   return String(token || '').replace(/^['"]|['"]$/g, '')
@@ -117,7 +107,7 @@ export function classifyDanger(name, args) {
   return null
 }
 
-export function attachGuard(ctx) {
+export function attachGuard(ctx, { routeOf, store } = {}) {
   if (process.env.DSH_FEISHU_GUARD === '0') {
     process.stderr.write('[dsh-feishu] high-risk bash guard off\n')
     return
@@ -125,15 +115,59 @@ export function attachGuard(ctx) {
   ctx.on('tools/pre-execute', async (exec, next) => {
     const kind = classifyDanger(exec.name, exec.arguments)
     if (!kind) return next()
-    const key = `${exec.name}:${String(exec.arguments?.command || '')}`
-    const granted = grantOf(exec.agent)
-    if (granted.has(key)) {
-      granted.delete(key)
+    const command = String(exec.arguments?.command || '')
+    const route = exec.agent && routeOf ? routeOf(exec.agent.id) : null
+    if (!route?.lark || !route.chatId || !store) {
+      process.stderr.write(`[dsh-feishu] guard deny ${kind} (no card route)\n`)
+      return { kind: 'deny', reason: `${DENY} (${kind})` }
+    }
+
+    const id = randomUUID()
+    const card = approvalCard({ id, kind, command })
+    let messageId = ''
+    try {
+      messageId = await route.lark.sendCard(route.chatId, card)
+    } catch (err) {
+      process.stderr.write(`[dsh-feishu] guard card failed: ${err}\n`)
+      return { kind: 'deny', reason: `${DENY} (${kind}; card failed)` }
+    }
+
+    process.stderr.write(`[dsh-feishu] guard wait ${kind} token=${id}\n`)
+    const rec = {
+      id,
+      kind: 'guard',
+      appId: route.appId,
+      chatId: route.chatId,
+      messageId,
+      lark: route.lark,
+    }
+    const onAbort = () => store.settle(id, { abort: true })
+    exec.signal?.addEventListener('abort', onAbort, { once: true })
+    let result
+    try {
+      result = await waitCard(store, rec)
+    } finally {
+      exec.signal?.removeEventListener('abort', onAbort)
+    }
+
+    if (result?.verdict === 'allow') {
+      void route.lark.editCard(messageId, lockedCard({
+        title: '已允许这一次',
+        template: 'green',
+        body: `原因：\`${kind}\`\n\`\`\`bash\n${command}\n\`\`\``,
+      }))
+      process.stderr.write(`[dsh-feishu] guard allow ${kind}\n`)
       return next()
     }
-    granted.add(key)
-    process.stderr.write(`[dsh-feishu] guard deny ${kind}\n`)
+
+    const title = result?.timeout ? '审核已过期' : result?.abort ? '审核已取消' : '已拒绝'
+    void route.lark.editCard(messageId, lockedCard({
+      title,
+      template: 'grey',
+      body: `原因：\`${kind}\`\n\`\`\`bash\n${command}\n\`\`\``,
+    }))
+    process.stderr.write(`[dsh-feishu] guard deny ${kind} ${title}\n`)
     return { kind: 'deny', reason: `${DENY} (${kind})` }
   })
-  process.stderr.write('[dsh-feishu] high-risk bash guard on\n')
+  process.stderr.write('[dsh-feishu] high-risk bash guard on (card)\n')
 }

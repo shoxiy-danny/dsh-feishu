@@ -1,6 +1,6 @@
 {
   "name": "dsh-feishu",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Feishu / Lark surface for DeepSeek Harness. No web UI. Chat, slash commands, progress, Goal, multi-bot.",
   "type": "module",
   "main": "src/index.js",

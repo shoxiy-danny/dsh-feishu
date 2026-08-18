@@ -74,6 +74,10 @@ Agent 自己多轮推进。进程重启后 **不会** 偷偷接着烧，要显�
 
 图 / 语音 / 文件落到本地 inbox，把路径写给模型。**不**把图片塞进 session image block。回图、回文件、回语音走 `send_file`。
 
+### 高危审核卡 / 提问卡
+
+未点名的 `rm`、`find -delete`、破坏性 git 会挂起，飞书出一张橙卡。点「允许这一次」才跑；打字同意不算批准。需要选择时模型调 `ask_user_question`，出蓝卡；也可以直接打字，先到的算数。开放平台须订 `card.action.trigger`。
+
 ## 五分钟跑起来
 
 面向一台已经能出网的 Linux 机器。需要 Node 22 和已安装的 `dsh`（`npm i -g @deepseek-ai/dsh`）。
@@ -192,6 +196,10 @@ Before a new user turn, older bulky `read` / `glob` / `grep` / `bash` results co
 ### Multimodal the Feishu way
 
 Inbound images / voice / files land in a local inbox; the model gets a path. Images are **not** stuffed into session image blocks. Replies go through `send_file`.
+
+### Approval cards / ask-user cards
+
+Unnamed `rm`, `find -delete`, and destructive git pause on an orange card. Tap **Allow once** to run. Typing yes does not approve. Choices go through `ask_user_question` (blue card); a typed reply also counts. First answer wins. Subscribe to `card.action.trigger` on the open platform.
 
 ## Five minutes
 

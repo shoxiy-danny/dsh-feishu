@@ -11,6 +11,8 @@ import { attachOutbound } from './outbound.js'
 import { attachGoal } from './goal.js'
 import { attachToolTrim } from './tooltrim.js'
 import { attachGuard } from './guard.js'
+import { attachAsk } from './ask.js'
+import { createCardStore, parseCardAction } from './cards.js'
 import { attachMicroCompact } from './microcompact.js'
 
 export const name = 'dsh-feishu'
@@ -87,9 +89,11 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
   await ctx.get('loader')?.await()
   if (ctx.get('agents') === undefined) return []
 
+  const cards = createCardStore()
   attachPrompts(ctx)
   attachToolTrim(ctx)
-  attachGuard(ctx)
+  attachGuard(ctx, { routeOf, store: cards })
+  attachAsk(ctx, { routeOf, store: cards })
   attachMicroCompact(ctx)
   attachOutbound(ctx, { routeOf })
 
@@ -108,7 +112,9 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
       process.stderr.write(
         `[dsh-feishu] inbound ${appId} ${msg.messageType} ${msg.messageId} chat=${msg.chatId}\n`,
       )
-      await onInbound({ appId, lark, msg, bridge, inboxRoot })
+      await onInbound({ appId, lark, msg, bridge, inboxRoot, cards })
+    }, {
+      onCard: (data) => onCardAction({ appId, data, cards }),
     })
     started.push(ws)
   }
@@ -121,7 +127,7 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
       process.stderr.write(
         `[dsh-feishu] inbound ${CLI_APP_ID} ${msg.messageType} ${msg.messageId} chat=${msg.chatId}\n`,
       )
-      return onInbound({ appId: CLI_APP_ID, lark: cliLark, msg, bridge, inboxRoot })
+      return onInbound({ appId: CLI_APP_ID, lark: cliLark, msg, bridge, inboxRoot, cards })
     },
     waitIdle: (appId, chatId) => bridge.waitIdle(appId, chatId),
   }))
@@ -131,7 +137,27 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
   return started
 }
 
-async function onInbound({ appId, lark, msg, bridge, inboxRoot }) {
+async function onCardAction({ appId, data, cards }) {
+  const action = parseCardAction(data)
+  const token = String(action.value?.token || '')
+  const rec = token ? cards.get(token) : null
+  if (!rec || rec.appId !== appId) {
+    return { toast: { type: 'info', content: '这张卡已经失效' } }
+  }
+  if (rec.kind === 'guard') {
+    const verdict = action.value?.verdict === 'allow' ? 'allow' : 'deny'
+    cards.settle(token, { verdict })
+    return { toast: { type: 'info', content: verdict === 'allow' ? '已允许' : '已拒绝' } }
+  }
+  if (rec.kind === 'ask') {
+    const opt = String(action.value?.opt || '')
+    cards.settle(token, { selected: opt ? [opt] : [] })
+    return { toast: { type: 'info', content: '已选择' } }
+  }
+  return { toast: { type: 'info', content: '已记录' } }
+}
+
+async function onInbound({ appId, lark, msg, bridge, inboxRoot, cards }) {
   const text = (msg.text || '').trim()
   const ackEmoji = text.toLowerCase() === '/stop' ? 'OK' : 'THUMBSUP'
   void lark.react(msg.messageId, ackEmoji)
@@ -143,6 +169,7 @@ async function onInbound({ appId, lark, msg, bridge, inboxRoot }) {
   }
 
   if (text.toLowerCase() === '/stop') {
+    cards?.rejectAll(appId, msg.chatId, 'stop')
     const ok = bridge.stop(appId, msg.chatId)
     if (ok === 'goal') {
       await lark.sendText(msg.chatId, '已停。Goal 已暂停，续跑用 /goal resume')
@@ -153,6 +180,7 @@ async function onInbound({ appId, lark, msg, bridge, inboxRoot }) {
   }
 
   if (text === '/clear') {
+    cards?.rejectAll(appId, msg.chatId, 'clear')
     await bridge.clear(appId, msg.chatId)
     await lark.sendText(msg.chatId, '已清空，下一句会开新会话')
     return
@@ -205,6 +233,12 @@ async function onInbound({ appId, lark, msg, bridge, inboxRoot }) {
 
   if (text.startsWith('/')) {
     await lark.sendText(msg.chatId, '本期支持 /stop /clear /model /status /compact /resume /rename /bye /goal')
+    return
+  }
+
+  const pendingAsk = cards?.finds(appId, msg.chatId, 'ask')?.[0]
+  if (pendingAsk && text) {
+    cards.settle(pendingAsk.id, { custom: text })
     return
   }
 

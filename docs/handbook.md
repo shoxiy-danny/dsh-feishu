@@ -92,7 +92,9 @@ DSH_FEISHU_DROP_TOOLS=mcp__browse__get_html
 
 ## 高爆径
 
-默认拦：未点名/大范围 `rm`、`find -delete`、破坏性 git、删库、磁盘擦除、杀 dsh 进程。同一条命令再说一次才放行。关：`DSH_FEISHU_GUARD=0`。
+默认拦：未点名/大范围 `rm`、`find -delete`、破坏性 git、删库、磁盘擦除、杀 dsh 进程。飞书出橙卡，点「允许这一次」才跑。打字同意不算批准。关：`DSH_FEISHU_GUARD=0`。
+
+提问走 `ask_user_question`：有选项出蓝卡，也可以直接打字。先到的算数。开放平台须订回调 `card.action.trigger`。
 
 ## 本地假 bot
 

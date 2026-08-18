@@ -29,14 +29,16 @@
 # /resume titles use a deterministic fallback, no extra LLM call
 - id: session-title-llm
   disabled: true
-# Feishu has no ask-user UI
+# Feishu cards implement user-questions. The model tool is inserted below.
 - id: user-questions
-  disabled: true
+  disabled: false
 
 - id: system-prompt
   config:
     persona: ''
 
 - insert:
+    - id: tool-ask-user
+      name: '@deepseek-ai/dsh-tool-ask-user'
     - id: dsh-feishu
       name: dsh-feishu

@@ -31,6 +31,7 @@
 - 订阅方式选 **长连接 / WebSocket**
 - 不要填 webhook URL，不要在本机开一个收事件的 HTTP 口
 - 事件至少勾：`im.message.receive_v1`
+- 回调再勾：`card.action.trigger`（高危审核卡、提问卡。没订则按钮点了没反应）
 
 保存后启动 `dsh --profile feishu`。日志出现 `ready bots=...` 再在单聊里打一句。
 
