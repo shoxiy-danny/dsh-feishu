@@ -1,0 +1,8 @@
+.env
+.dsh-home/
+logs/
+workspace/*
+!workspace/.gitkeep
+*.log
+.DS_Store
+node_modules/

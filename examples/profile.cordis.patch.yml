@@ -1,0 +1,35 @@
+# Copy these rows into ~/.dsh/profiles/feishu/cordis.patch.yml
+# after `dsh plugin --profile feishu add ...`.
+# Later layers replace a whole config object, they do not deep-merge.
+
+# Optional: extra providers beyond DeepSeek official.
+# Keys stay in the environment; never put secrets in this file.
+#
+# - id: llm-pi-ai
+#   config:
+#     providers:
+#       my-glm:
+#         displayName: GLM
+#         apiKeyEnv: MY_GLM_KEY
+#         api: openai-responses
+#         baseURL: https://open.bigmodel.cn/api/v1
+#         reasoning: max
+#         defaultContextWindow: 1000000
+#         models:
+#           - id: glm-5
+#             name: glm-5
+#             contextWindow: 1000000
+#
+# Then point DSH_FEISHU_MODELS at examples/models.json (or your copy)
+# and add a matching alias there.
+
+# Optional MCP clients. Only add these if you actually run those servers.
+# - insert:
+#     - id: mcp-search
+#       name: '@deepseek-ai/dsh-mcp-client'
+#       config:
+#         serverName: search
+#         transport: streamable-http
+#         url: http://127.0.0.1:19002/mcp
+#         reconnect:
+#           enabled: true

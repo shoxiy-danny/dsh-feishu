@@ -1,0 +1,78 @@
+#!/usr/bin/env node
+import { createConnection } from 'node:net'
+
+const SOCK = process.env.DSH_FEISHU_CLI_SOCK || '/tmp/dsh-feishu-cli.sock'
+
+const args = process.argv.slice(2)
+if (args.length === 0 || args[0] === '-h' || args[0] === '--help') {
+  process.stderr.write(`dsh-feishu-cli send [-c chat] [--no-wait] <text>
+dsh-feishu-cli drain [-c chat]
+dsh-feishu-cli ping
+`)
+  process.exit(args.length === 0 ? 2 : 0)
+}
+
+const cmd = args[0]
+let chatId = 'local'
+let wait = true
+const rest = []
+for (let i = 1; i < args.length; i++) {
+  if (args[i] === '-c' || args[i] === '--chat') {
+    chatId = args[++i] || 'local'
+    continue
+  }
+  if (args[i] === '--no-wait') {
+    wait = false
+    continue
+  }
+  rest.push(args[i])
+}
+
+const req = { id: String(Date.now()), cmd, chatId, wait }
+if (cmd === 'send') req.text = rest.join(' ')
+
+const sock = createConnection(SOCK)
+sock.setEncoding('utf8')
+
+let buf = ''
+sock.on('connect', () => {
+  sock.write(JSON.stringify(req) + '\n')
+})
+sock.on('data', (chunk) => {
+  buf += chunk
+  const nl = buf.indexOf('\n')
+  if (nl < 0) return
+  const line = buf.slice(0, nl)
+  let resp
+  try { resp = JSON.parse(line) } catch {
+    process.stderr.write('bad reply\n')
+    process.exit(1)
+  }
+  if (!resp.ok) {
+    process.stderr.write((resp.error || 'failed') + '\n')
+    printEvents(resp.events)
+    process.exit(1)
+  }
+  if (cmd === 'ping') {
+    process.stdout.write('pong\n')
+    process.exit(0)
+  }
+  printEvents(resp.events)
+  process.exit(0)
+})
+sock.on('error', (err) => {
+  process.stderr.write(`dsh-feishu-cli: ${err.message} (${SOCK})\n`)
+  process.exit(1)
+})
+
+function printEvents(events) {
+  if (!Array.isArray(events) || events.length === 0) return
+  for (const ev of events) {
+    if (ev.type === 'react') continue
+    if (ev.type === 'text' || ev.type === 'card' || ev.type === 'edit') {
+      process.stdout.write(String(ev.text || '') + '\n')
+    } else if (ev.type === 'file') {
+      process.stdout.write(`[file] ${ev.path}${ev.voice ? ' voice' : ''}\n`)
+    }
+  }
+}

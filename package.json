@@ -1,0 +1,47 @@
+{
+  "name": "dsh-feishu",
+  "version": "0.1.0",
+  "description": "Feishu / Lark surface for DeepSeek Harness. No web UI. Chat, slash commands, progress, Goal, multi-bot.",
+  "type": "module",
+  "main": "src/index.js",
+  "license": "MIT",
+  "author": "shoxiy-danny",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shoxiy-danny/dsh-feishu"
+  },
+  "bugs": {
+    "url": "https://github.com/shoxiy-danny/dsh-feishu/issues"
+  },
+  "homepage": "https://github.com/shoxiy-danny/dsh-feishu#readme",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "dsh-bundle",
+    "deepseek-harness",
+    "feishu",
+    "lark",
+    "bot"
+  ],
+  "files": [
+    "src",
+    "prompts",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test src/*.test.js"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.59.0"
+  }
+}

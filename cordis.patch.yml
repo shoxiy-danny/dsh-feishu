@@ -1,0 +1,42 @@
+# Feishu surface over dsh-base. No web-app / headless.
+# Users override credentials and extra models in their profile cordis.patch.yml.
+- id: hmr
+  disabled: true
+
+- id: plan-mode
+  disabled: true
+
+# Tools the Feishu surface does not use. Closing a row drops its schema too.
+- id: tool-workflow
+  disabled: true
+- id: workflow-worker-thread
+  disabled: true
+- id: tool-ralph
+  disabled: true
+- id: tool-todo
+  disabled: true
+- id: tool-str-replace-editor
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: subagent-fork-in-process
+  disabled: true
+# Images in session blocks break many text-only models. Files land on disk instead.
+- id: attachment-local
+  disabled: true
+# /resume titles use a deterministic fallback, no extra LLM call
+- id: session-title-llm
+  disabled: true
+# Feishu has no ask-user UI
+- id: user-questions
+  disabled: true
+
+- id: system-prompt
+  config:
+    persona: ''
+
+- insert:
+    - id: dsh-feishu
+      name: dsh-feishu
