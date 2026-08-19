@@ -164,6 +164,53 @@ export function lockedCard({ title, template, body }) {
   }
 }
 
+export function resumeCard({ id, items }) {
+  const token = String(id || '')
+  const elements = [
+    { tag: 'markdown', content: '点一条切过去。占用中的不能同时握。点「都不选」留在当前。也可 `/resume 2`。' },
+  ]
+  for (const [i, item] of (items || []).entries()) {
+    const n = Number(item.n || i + 1)
+    const bits = []
+    if (item.from) bits.push(item.from)
+    if (item.when) bits.push(item.when)
+    if (item.size) bits.push(item.size)
+    if (item.busy) bits.push('占用')
+    if (item.current) bits.push('当前')
+    const hint = bits.length ? `\n_${bits.join(' · ')}_` : ''
+    elements.push({
+      tag: 'button',
+      element_id: eid('rb', token, i),
+      type: item.current ? 'primary' : 'default',
+      text: { tag: 'plain_text', content: resumeButtonLabel(item, n) },
+      behaviors: [{ type: 'callback', value: { kind: 'resume', token, op: 'pick', n: String(n) } }],
+    })
+    if (hint) elements.push({ tag: 'markdown', content: hint.trim() })
+  }
+  elements.push({
+    tag: 'button',
+    element_id: eid('rs', token),
+    type: 'default',
+    text: { tag: 'plain_text', content: '都不选，留在当前' },
+    behaviors: [{ type: 'callback', value: { kind: 'resume', token, op: 'stay' } }],
+  })
+  return {
+    schema: '2.0',
+    config: { update_multi: true },
+    header: {
+      title: { tag: 'plain_text', content: '选择会话' },
+      template: 'blue',
+    },
+    body: { elements },
+  }
+}
+
+function resumeButtonLabel(item, n) {
+  const mark = item.current ? '* ' : ''
+  const busy = item.busy ? ' 占用' : ''
+  return `${mark}${n}. ${item.title || ''}${busy}`.slice(0, 40)
+}
+
 export function goalCard({ id, title, template, body, actions, form }) {
   const token = String(id || '')
   const elements = [

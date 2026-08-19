@@ -1,7 +1,7 @@
 {
   "name": "dsh-feishu",
-  "version": "0.1.2",
-  "description": "The harness lives in Feishu, on a Linux server. Goal cards, live progress, multi-bot. Not a remote for the webpage.",
+  "version": "0.1.3",
+  "description": "The harness lives in Feishu, on a Linux server. Goal cards, resume cards, live progress, multi-bot. Not a remote for the webpage.",
   "type": "module",
   "main": "src/index.js",
   "license": "MIT",

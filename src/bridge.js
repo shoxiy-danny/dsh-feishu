@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { formatGoalError, formatGoalStatus, parseGoalObjective } from './goal.js'
 import { aliasOf, loadModels, selectionFromAlias, windowOf as modelWindow } from './models.js'
-import { collectHost, formatStatus, measureContext } from './status.js'
+import { collectHost, formatBytes, formatStatus, measureContext, sessionFileBytes } from './status.js'
 import { enableMcp } from './tooltrim.js'
 
 export function createBridge(ctx, options) {
@@ -354,12 +354,13 @@ export function createBridge(ctx, options) {
     if (chats[chatKey]?.sessionId) writeChat(appId, chatId, { dropSession: true })
   }
 
-  async function listResumes(appId, chatId) {
+  async function listResumeItems(appId, chatId) {
     const current = chats[keyOf(appId, chatId)]?.sessionId
       || (live.get(keyOf(appId, chatId)) && String(live.get(keyOf(appId, chatId)).agent.id))
+      || null
     const query = ctx.get('sessionQuery')
-    const mine = history.items.slice(0, 15)
-    if (mine.length === 0) return '没有可恢复的会话。先聊一句，或 /clear 过的也会出现在这里。'
+    const mine = history.items.slice(0, 8)
+    if (mine.length === 0) return { current, items: [] }
 
     const ids = mine.map((item) => item.id)
     let titles = []
@@ -379,14 +380,33 @@ export function createBridge(ctx, options) {
       }
     }
 
-    const lines = mine.map((item, i) => {
-      const n = i + 1
-      const mark = item.id === current ? '*' : ' '
-      const title = item.title || titleById.get(item.id) || item.id.slice(0, 12)
-      const when = formatWhen(item.updatedAt)
-      const from = item.appId && item.appId !== appId ? `  [${shortApp(item.appId)}]` : ''
-      const busy = holderOf(item.id) && holderOf(item.id).chatKey !== keyOf(appId, chatId) ? ' 占用' : ''
-      return `${mark}${n}. ${title}${from}${busy}  ${when}`
+    const home = dirname(mapPath)
+    const items = mine.map((item, i) => {
+      const held = holderOf(item.id)
+      const bytes = sessionFileBytes(home, item.id)
+      return {
+        n: i + 1,
+        id: item.id,
+        title: item.title || titleById.get(item.id) || item.id.slice(0, 12),
+        when: formatWhen(item.updatedAt),
+        from: item.appId && item.appId !== appId ? shortApp(item.appId) : '',
+        size: bytes ? formatBytes(bytes) : '',
+        busy: Boolean(held && held.chatKey !== keyOf(appId, chatId)),
+        current: item.id === current,
+      }
+    })
+    return { current, items }
+  }
+
+  async function listResumes(appId, chatId) {
+    const { items } = await listResumeItems(appId, chatId)
+    if (items.length === 0) return '没有可恢复的会话。先聊一句，或 /clear 过的也会出现在这里。'
+    const lines = items.map((item) => {
+      const mark = item.current ? '*' : ' '
+      const from = item.from ? `  [${item.from}]` : ''
+      const busy = item.busy ? ' 占用' : ''
+      const size = item.size ? `  ${item.size}` : ''
+      return `${mark}${item.n}. ${item.title}${from}${busy}  ${item.when}${size}`
     })
     return `近期会话（多 bot 共用，* 当前）\n${lines.join('\n')}\n\n/resume 2 切到第 2 条。占用中的不能同时握。`
   }
@@ -395,7 +415,7 @@ export function createBridge(ctx, options) {
     const raw = String(token || '').trim()
     if (!raw) return listResumes(appId, chatId)
     const n = Number.parseInt(raw, 10)
-    const mine = history.items.slice(0, 15)
+    const mine = history.items.slice(0, 8)
     if (!Number.isInteger(n) || n < 1 || n > mine.length) {
       return `序号无效。用 /resume 看列表，或 /resume 1–${mine.length || 0}`
     }
@@ -567,7 +587,7 @@ export function createBridge(ctx, options) {
 
   return {
     deliver, stop, clear, setModel, status, compact, runGoal, goalOf,
-    listResumes, resumeAt, rename, waitIdle,
+    listResumeItems, listResumes, resumeAt, rename, waitIdle,
     chatOf, routeOf, selectionOf, selectionOfKey,
     windowOf: (sel) => modelWindow(MODELS, sel),
     disposeAll,

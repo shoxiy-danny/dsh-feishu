@@ -277,9 +277,29 @@ export async function presentGoal({ views, lark, appId, chatId, goal, notice, re
     })
   }
 
-  const messageId = await lark.sendCard(chatId, card)
-  views.put({ id, appId, chatId, messageId, lark })
-  return messageId
+  try {
+    const messageId = await lark.sendCard(chatId, card)
+    views.put({ id, appId, chatId, messageId, lark })
+    return messageId
+  } catch (err) {
+    process.stderr.write(`[dsh-feishu] goal card send failed: ${formatLarkErr(err)}\n`)
+    if (lark.sendText) {
+      await lark.sendText(chatId, fallbackGoalText(goal, notice)).catch(() => {})
+    }
+    return ''
+  }
+}
+
+function fallbackGoalText(goal, notice) {
+  const lead = noticeLine(notice)
+  if (!goal) return [lead, EMPTY_GOAL_HELP].filter(Boolean).join('\n\n')
+  return goalCardBody(goal, notice).replace(/\*\*/g, '')
+}
+
+function formatLarkErr(err) {
+  const data = err?.response?.data
+  if (data?.msg) return `${data.code || ''} ${data.msg}`.trim()
+  return String(err?.message || err)
 }
 
 export function attachGoal(ctx, { routeOf, views }) {

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { askCard, createCardStore, formField, goalCard, parseCardAction } from './cards.js'
+import { askCard, createCardStore, formField, goalCard, parseCardAction, resumeCard } from './cards.js'
 
 test('settle is first-wins', () => {
   const store = createCardStore()
@@ -117,4 +117,25 @@ test('askCard always includes answer form', () => {
   assert.equal(form.elements[1].behaviors[0].value.op, 'custom')
   const buttons = card.body.elements.filter((el) => el.tag === 'button')
   assert.equal(buttons[0].behaviors[0].value.opt, 'HTML')
+})
+
+test('resumeCard wires pick and stay', () => {
+  const card = resumeCard({
+    id: 'resume-tok',
+    items: [
+      { n: 1, title: '当前会话', when: '08-20 10:00', size: '3.4M', current: true },
+      { n: 2, title: '旧会话', when: '08-19 09:00', from: 'bot-2', busy: true },
+    ],
+  })
+  assert.equal(card.header.title.content, '选择会话')
+  const buttons = card.body.elements.filter((el) => el.tag === 'button')
+  assert.equal(buttons.length, 3)
+  assert.equal(buttons[0].type, 'primary')
+  assert.deepEqual(buttons[0].behaviors[0].value, { kind: 'resume', token: 'resume-tok', op: 'pick', n: '1' })
+  assert.deepEqual(buttons[1].behaviors[0].value, { kind: 'resume', token: 'resume-tok', op: 'pick', n: '2' })
+  assert.match(buttons[1].text.content, /占用/)
+  const hints = card.body.elements.filter((el) => el.tag === 'markdown').map((el) => el.content)
+  assert.ok(hints.some((text) => text.includes('3.4M')))
+  assert.deepEqual(buttons[2].behaviors[0].value, { kind: 'resume', token: 'resume-tok', op: 'stay' })
+  assert.equal(buttons[2].text.content, '都不选，留在当前')
 })

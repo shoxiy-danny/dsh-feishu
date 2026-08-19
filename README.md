@@ -27,7 +27,7 @@
 
 插件市场里 `feishu` / `lark` 已经三十多个。多数是通知器、多 IM 网关，或 `dsh plugin --profile web add` 之后挂在官方网页旁边的桥。飞书只是遥控器：网页还在，关掉浏览器，产品就少了一半。不少还默认你坐在个人 PC 前，终端里弹二维码。
 
-这套是跑在飞书里的 harness，部署面是 **Linux 服务器**。一个 `dsh --profile feishu` 当守护进程常驻，日志进文件，没有要人盯着的 TTY。飞书长连接进、飞书卡片出。模型、斜杠命令、进度、Goal、会话，全部发生在聊天框。没有 3080，没有审批弹窗，没有给本机用的 TUI。
+这套是跑在飞书里的 harness，部署面是 **Linux 服务器**。一个 `dsh --profile feishu` 当守护进程常驻，日志进文件，没有要人盯着的 TTY。飞书长连接进、飞书卡片出。模型、斜杠命令、进度、Goal、会话，全部发生在聊天框。没有 3080，没有给本机用的 TUI。高危操作出飞书审批卡，不是网页弹窗。
 
 首个 bot 只能在开放平台建好，把 App ID / Secret 写进环境变量再启动。服务器上没处可贴二维码。已经通了的 bot 再开第二个，码可以打回飞书；那是后话，不是第一次上手。
 
@@ -94,7 +94,7 @@ Agent 自己多轮推进。进程重启后 **不会** 偷偷接着烧，要在�
 
 ### 上下文会自己收
 
-新用户轮开始前，更早的 read / glob / grep / bash 大结果收成占位。glob 自动滤掉 `node_modules` / `.git` / `.pnpm`。可选：生图 / 多步浏览类 MCP 藏到 `enable_mcp` 之后。
+累计过 100K 之后，名单内（read / glob / grep / bash / 搜索读页）且超过 8K 的工具结果，完整进模型 3 次，第 4 次发送前走官方头 4K 尾 1K。skill 不过。冷启动和开门前的历史不回砍。glob 自动滤掉 `node_modules` / `.git` / `.pnpm`。可选：生图 / 多步浏览类 MCP 藏到 `enable_mcp` 之后。规格见 [PRUNE.md](PRUNE.md)。
 
 ### 多模态按飞书的方式走
 
@@ -168,7 +168,7 @@ chmod +x scripts/*.sh scripts/dsh-feishu-cli
 
 The plugin market already has thirty-plus `feishu` / `lark` listings. Most are notifiers, multi-IM gateways, or bridges you add with `dsh plugin --profile web add`. Feishu is only a remote: the webpage is still there, and closing the browser takes half the product with it.
 
-This is the harness, running in Feishu, meant for a **Linux server**, not a laptop you scan a terminal QR on. One `dsh --profile feishu` as a daemon. Logs go to a file. Nobody has to watch a TTY. Feishu WebSocket in, Feishu card out. Models, slash commands, progress, Goal, sessions: all in chat. No port 3080. No approval popup. No desktop TUI.
+This is the harness, running in Feishu, meant for a **Linux server**, not a laptop you scan a terminal QR on. One `dsh --profile feishu` as a daemon. Logs go to a file. Nobody has to watch a TTY. Feishu WebSocket in, Feishu card out. Models, slash commands, progress, Goal, sessions: all in chat. No port 3080. No desktop TUI. High-risk commands pause on a Feishu approval card, not a web popup.
 
 The first bot has to be created on the open platform and dropped into env vars. A headless server has nowhere to put a QR code. Extra bots can later be opened from an already-working chat; that is not how you bootstrap.
 
@@ -215,7 +215,11 @@ The same process holds 2–3 Feishu apps. Sessions are keyed by `(appId, chat_id
 
 `/stop` `/clear` `/model` `/status` `/compact` `/resume` `/rename` `/goal` `/bye`
 
-Unknown `/` replies with the supported list. Full table: [docs/handbook.md](docs/handbook.md).
+Unknown `/` replies with the supported list. Full table: [docs/handbook.md](docs/handbook.md). `/resume` with no number sends a session card. The model can rename via `SlashCommand({ command: "/rename …" })`.
+
+### Context prunes itself
+
+After 100K tokens, large read / glob / grep / bash / search results stay intact for 3 model views, then official head 4K + tail 1K. Skill results are never cut. Spec: [PRUNE.md](PRUNE.md).
 
 ### Approval cards / ask-user cards
 

@@ -1,6 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { formatBytes, formatStatus, formatTokensK, measureContext, parseDf, parseMeminfo } from './status.js'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { formatBytes, formatStatus, formatTokensK, measureContext, parseDf, parseMeminfo, sessionFileBytes } from './status.js'
 
 test('formatTokensK', () => {
   assert.equal(formatTokensK(0), '0K')
@@ -15,10 +18,21 @@ test('formatBytes', () => {
   assert.equal(formatBytes(512), '1K')
   assert.equal(formatBytes(1536), '2K')
   assert.equal(formatBytes(5 * 1024 ** 2), '5.0M')
+  assert.equal(formatBytes(3.4 * 1024 ** 2), '3.4M')
   assert.equal(formatBytes(12 * 1024 ** 2), '12M')
   assert.equal(formatBytes(3.2 * 1024 ** 3), '3.2G')
   assert.equal(formatBytes(32 * 1024 ** 3), '32G')
   assert.equal(formatBytes(-1), '?')
+})
+
+test('sessionFileBytes stats compressed log', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-sess-'))
+  const dir = join(root, 'sessions', '--home-user--', 'session-abc')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'session.jsonl.zstd'), Buffer.alloc(3400))
+  assert.equal(sessionFileBytes(root, 'session-abc'), 3400)
+  assert.equal(sessionFileBytes(root, 'missing'), 0)
+  assert.equal(sessionFileBytes('', 'session-abc'), 0)
 })
 
 test('parseMeminfo uses MemAvailable', () => {

@@ -12,8 +12,10 @@ import { attachGoal, createGoalViews, dismissGoal, noticeOfGoalLine, presentGoal
 import { attachToolTrim } from './tooltrim.js'
 import { attachGuard } from './guard.js'
 import { attachAsk } from './ask.js'
-import { createCardStore, formField, parseCardAction } from './cards.js'
+import { createCardStore, formField, lockedCard, parseCardAction } from './cards.js'
+import { presentResume, resumePickFailed } from './resume.js'
 import { attachMicroCompact } from './microcompact.js'
+import { attachCmd } from './cmd.js'
 
 export const name = 'dsh-feishu'
 export const inject = ['agents', 'sessions', 'agentDefaultModel', 'systemPrompt', 'tools']
@@ -96,6 +98,7 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
   attachGuard(ctx, { routeOf, store: cards })
   attachAsk(ctx, { routeOf, store: cards })
   attachMicroCompact(ctx)
+  attachCmd(ctx, { routeOf, bridge })
   attachOutbound(ctx, { routeOf })
 
   attachProgress(ctx, {
@@ -195,7 +198,64 @@ async function onCardAction({ appId, lark, data, cards, bridge, views }) {
     cards.settle(token, { selected: opt ? [opt] : [] })
     return { toast: { type: 'info', content: '已选择' } }
   }
+  if (rec.kind === 'resume') {
+    const op = String(action.value?.op || '')
+    if (op === 'stay') {
+      cards.settle(token, { stay: true })
+      return cardAck('留在当前会话', lockedCard({
+        title: '未切换',
+        template: 'grey',
+        body: '留在当前会话。',
+      }))
+    }
+    if (op === 'pick') {
+      const n = String(action.value?.n || '')
+      cards.settle(token, { picked: n })
+      setTimeout(() => {
+        void finishResumePick({ appId, lark: rec.lark || lark, rec, n, bridge, views })
+      }, 0)
+      return cardAck('正在切换', lockedCard({
+        title: '正在切换',
+        template: 'blue',
+        body: '正在切到所选会话。',
+      }))
+    }
+    return { toast: { type: 'info', content: '未知操作' } }
+  }
   return { toast: { type: 'info', content: '已记录' } }
+}
+
+function cardAck(content, card) {
+  return {
+    toast: { type: 'info', content },
+    card: { type: 'raw', data: card },
+  }
+}
+
+async function finishResumePick({ appId, lark, rec, n, bridge, views }) {
+  const reply = await bridge.resumeAt(appId, rec.chatId, n)
+  if (resumePickFailed(reply)) {
+    if (rec.messageId && lark?.editCard) {
+      await lark.editCard(rec.messageId, lockedCard({
+        title: '切不过去',
+        template: 'red',
+        body: reply,
+      })).catch((err) => {
+        process.stderr.write(`[dsh-feishu] resume pick fail card: ${err}\n`)
+      })
+    }
+    return
+  }
+  await dismissGoal(views, lark, appId, rec.chatId, '已切到别的会话。')
+  if (rec.messageId && lark?.editCard) {
+    await lark.editCard(rec.messageId, lockedCard({
+      title: '已切换',
+      template: 'green',
+      body: reply,
+    })).catch((err) => {
+      process.stderr.write(`[dsh-feishu] resume pick ok card: ${err}\n`)
+    })
+  }
 }
 
 function goalToast(op) {
@@ -271,9 +331,28 @@ async function onInbound({ appId, lark, msg, bridge, inboxRoot, cards, goalViews
 
   if (text === '/resume' || text.startsWith('/resume ')) {
     const token = text.slice('/resume'.length).trim()
-    if (token) await dismissGoal(goalViews, lark, appId, msg.chatId, '已切到别的会话。')
-    const reply = await bridge.resumeAt(appId, msg.chatId, token)
-    await lark.sendText(msg.chatId, reply)
+    if (token) {
+      const reply = await bridge.resumeAt(appId, msg.chatId, token)
+      if (!resumePickFailed(reply)) {
+        await dismissGoal(goalViews, lark, appId, msg.chatId, '已切到别的会话。')
+        for (const rec of cards?.finds(appId, msg.chatId, 'resume') || []) {
+          cards.settle(rec.id, { abort: true, reason: 'switched' })
+        }
+      }
+      await lark.sendText(msg.chatId, reply)
+      return
+    }
+    const { items } = await bridge.listResumeItems(appId, msg.chatId)
+    if (items.length === 0) {
+      await lark.sendText(msg.chatId, '没有可恢复的会话。先聊一句，或 /clear 过的也会出现在这里。')
+      return
+    }
+    try {
+      await presentResume({ store: cards, lark, appId, chatId: msg.chatId, items })
+    } catch (err) {
+      process.stderr.write(`[dsh-feishu] resume card failed: ${err}\n`)
+      await lark.sendText(msg.chatId, await bridge.listResumes(appId, msg.chatId))
+    }
     return
   }
 

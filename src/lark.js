@@ -72,17 +72,24 @@ export function createLark(creds = process.env) {
 
   async function sendCard(chatId, card) {
     if (!chatId) return ''
-    const resp = await client.im.message.create({
-      params: { receive_id_type: 'chat_id' },
-      data: {
-        receive_id: chatId,
-        msg_type: 'interactive',
-        content: JSON.stringify(card),
-      },
-    })
-    const id = resp?.data?.message_id ?? resp?.message_id ?? ''
-    if (id) noteSeen(id)
-    return id
+    try {
+      const resp = await client.im.message.create({
+        params: { receive_id_type: 'chat_id' },
+        data: {
+          receive_id: chatId,
+          msg_type: 'interactive',
+          content: JSON.stringify(card),
+        },
+      })
+      const id = resp?.data?.message_id ?? resp?.message_id ?? ''
+      if (id) noteSeen(id)
+      return id
+    } catch (err) {
+      const data = err?.response?.data
+      const detail = data?.msg || data?.error?.message || err?.message || err
+      process.stderr.write(`[dsh-feishu] sendCard failed: ${data?.code || ''} ${detail}\n`)
+      throw err
+    }
   }
 
   async function editCard(messageId, card) {

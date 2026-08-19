@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 — 2026-08-19
+
+Resume is a Feishu card: tap a session or stay. `/rename` is also a model tool (`SlashCommand`). Tool results wait until 100K then keep 3 full views before official head/tail.
+
 ## 0.1.2 — 2026-08-19
 
 Goal is a Feishu card: create / edit on a form, pause / resume / clear as buttons. Ask cards always include a text form. Complete and blocked update the same card. Packaging: README cover, product mark.

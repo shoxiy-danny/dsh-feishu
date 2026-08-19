@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { cpus, hostname, loadavg } from 'node:os'
+import { join } from 'node:path'
 
 export function formatTokensK(n) {
   const v = Number(n)
@@ -22,6 +23,35 @@ export function formatBytes(n) {
     return `${m >= 10 ? m.toFixed(0) : m.toFixed(1)}M`
   }
   return `${Math.round(v / 1024)}K`
+}
+
+const SESSION_LOGS = ['session.jsonl.zstd', 'session.jsonl']
+
+export function sessionFileBytes(root, sessionId) {
+  const id = String(sessionId || '')
+  if (!root || !id) return 0
+  const sessionsRoot = join(root, 'sessions')
+  try {
+    for (const project of readdirSync(sessionsRoot, { withFileTypes: true })) {
+      if (!project.isDirectory()) continue
+      const dir = join(sessionsRoot, project.name, id)
+      const size = logBytes(dir)
+      if (size) return size
+    }
+  } catch {
+    return 0
+  }
+  return 0
+}
+
+function logBytes(dir) {
+  for (const name of SESSION_LOGS) {
+    try {
+      const st = statSync(join(dir, name))
+      if (st.isFile() && st.size > 0) return st.size
+    } catch { /* missing */ }
+  }
+  return 0
 }
 
 export function parseMeminfo(text) {

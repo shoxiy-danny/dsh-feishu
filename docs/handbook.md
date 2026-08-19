@@ -11,7 +11,7 @@
 | `/model` | 列出可用模型。`/model dsf` 热切换，本会话记住 |
 | `/status` | 当前模型、上下文占比、本机内存/磁盘/CPU |
 | `/compact` | 压缩历史。可带一句焦点：`/compact 只留接口约定` |
-| `/resume` | 列出近期会话。`/resume 2` 切到第 2 条 |
+| `/resume` | 发会话卡片：点一条切过去，或不选留在当前；`/resume 2` 仍可用 |
 | `/rename 名字` | 给当前会话起名 |
 | `/goal` | Goal，见下一节 |
 | `/bye` | 交给 Agent 做会话收尾（若你的提示词/skill 认这个词） |
@@ -100,6 +100,14 @@ DSH_FEISHU_DROP_TOOLS=mcp__browse__get_html
 ```
 
 没有这些 MCP 也能跑，只是 `enable_mcp` 打开后找不到对应工具。
+
+## SlashCommand
+
+模型可用 `SlashCommand({ command: "/rename 短名" })` 给当前会话改名。只允许 `/rename`。用户手打 `/status` `/clear` `/stop` 仍走入站，不给模型。
+
+## 上下文 8K 门
+
+累计过 100K 才开门。之后名单内、超过 8K 的 `tool/result` 完整看 3 次，第 4 次发送前剪成官方头 4K 尾 1K。skill / 报错 / 开门前历史不过。规格见 [PRUNE.md](../PRUNE.md)。
 
 ## 高爆径
 
