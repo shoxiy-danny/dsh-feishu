@@ -81,7 +81,7 @@ async function askOne({ question, route, store, signal }) {
 
   if (result?.custom) {
     void route.lark.editCard(messageId, lockedCard({
-      title: '已用文字回答',
+      title: '已提交回答',
       template: 'green',
       body: `**${question.question}**\n${result.custom}`,
     }))

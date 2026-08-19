@@ -8,11 +8,11 @@ import { attachCliServer } from './cli-server.js'
 import { attachProgress } from './progress.js'
 import { attachPrompts } from './prompts.js'
 import { attachOutbound } from './outbound.js'
-import { attachGoal } from './goal.js'
+import { attachGoal, createGoalViews, dismissGoal, noticeOfGoalLine, presentGoal } from './goal.js'
 import { attachToolTrim } from './tooltrim.js'
 import { attachGuard } from './guard.js'
 import { attachAsk } from './ask.js'
-import { createCardStore, parseCardAction } from './cards.js'
+import { createCardStore, formField, parseCardAction } from './cards.js'
 import { attachMicroCompact } from './microcompact.js'
 
 export const name = 'dsh-feishu'
@@ -90,6 +90,7 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
   if (ctx.get('agents') === undefined) return []
 
   const cards = createCardStore()
+  const goalViews = createGoalViews()
   attachPrompts(ctx)
   attachToolTrim(ctx)
   attachGuard(ctx, { routeOf, store: cards })
@@ -103,7 +104,7 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
     windowOf: bridge.windowOf,
     goalOf: (sessionId) => bridge.goalOf(sessionId),
   })
-  attachGoal(ctx, { routeOf })
+  attachGoal(ctx, { routeOf, views: goalViews })
 
   const started = []
   for (const [appId, lark] of bots) {
@@ -112,9 +113,9 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
       process.stderr.write(
         `[dsh-feishu] inbound ${appId} ${msg.messageType} ${msg.messageId} chat=${msg.chatId}\n`,
       )
-      await onInbound({ appId, lark, msg, bridge, inboxRoot, cards })
+      await onInbound({ appId, lark, msg, bridge, inboxRoot, cards, goalViews })
     }, {
-      onCard: (data) => onCardAction({ appId, data, cards }),
+      onCard: (data) => onCardAction({ appId, lark, data, cards, bridge, views: goalViews }),
     })
     started.push(ws)
   }
@@ -127,7 +128,7 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
       process.stderr.write(
         `[dsh-feishu] inbound ${CLI_APP_ID} ${msg.messageType} ${msg.messageId} chat=${msg.chatId}\n`,
       )
-      return onInbound({ appId: CLI_APP_ID, lark: cliLark, msg, bridge, inboxRoot, cards })
+      return onInbound({ appId: CLI_APP_ID, lark: cliLark, msg, bridge, inboxRoot, cards, goalViews })
     },
     waitIdle: (appId, chatId) => bridge.waitIdle(appId, chatId),
   }))
@@ -137,12 +138,44 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
   return started
 }
 
-async function onCardAction({ appId, data, cards }) {
+async function onCardAction({ appId, lark, data, cards, bridge, views }) {
   const action = parseCardAction(data)
   const token = String(action.value?.token || '')
+  if (action.value?.kind === 'goal') {
+    const rec = token ? views?.get(token) : null
+    if (!rec || rec.appId !== appId) {
+      return { toast: { type: 'info', content: '这张卡片已失效' } }
+    }
+    const op = String(action.value.op || '')
+    let line = ''
+    if (op === 'pause' || op === 'resume' || op === 'clear') {
+      line = `/goal ${op}`
+    } else if (op === 'create' || op === 'edit') {
+      const objective = formField(action, 'objective')
+      if (!objective) {
+        return { toast: { type: 'info', content: op === 'edit' ? '请填写新的目标内容' : '请填写目标' } }
+      }
+      line = op === 'edit' ? `/goal edit ${objective}` : `/goal ${objective}`
+    } else {
+      return { toast: { type: 'info', content: '未知操作' } }
+    }
+    const result = await bridge.runGoal(appId, rec.chatId, line)
+    if (!result.ok) {
+      return { toast: { type: 'info', content: String(result.text || '操作失败').slice(0, 40) } }
+    }
+    await presentGoal({
+      views,
+      lark: rec.lark || lark,
+      appId,
+      chatId: rec.chatId,
+      goal: result.goal,
+      notice: op,
+    })
+    return { toast: { type: 'info', content: goalToast(op) } }
+  }
   const rec = token ? cards.get(token) : null
   if (!rec || rec.appId !== appId) {
-    return { toast: { type: 'info', content: '这张卡已经失效' } }
+    return { toast: { type: 'info', content: '这张卡片已失效' } }
   }
   if (rec.kind === 'guard') {
     const verdict = action.value?.verdict === 'allow' ? 'allow' : 'deny'
@@ -150,14 +183,31 @@ async function onCardAction({ appId, data, cards }) {
     return { toast: { type: 'info', content: verdict === 'allow' ? '已允许' : '已拒绝' } }
   }
   if (rec.kind === 'ask') {
-    const opt = String(action.value?.opt || '')
+    if (action.value?.op === 'custom' || !action.value?.opt) {
+      const custom = formField(action, 'answer')
+      if (!custom) {
+        return { toast: { type: 'info', content: '请填写回答后再提交' } }
+      }
+      cards.settle(token, { custom })
+      return { toast: { type: 'info', content: '已提交回答' } }
+    }
+    const opt = String(action.value.opt || '')
     cards.settle(token, { selected: opt ? [opt] : [] })
     return { toast: { type: 'info', content: '已选择' } }
   }
   return { toast: { type: 'info', content: '已记录' } }
 }
 
-async function onInbound({ appId, lark, msg, bridge, inboxRoot, cards }) {
+function goalToast(op) {
+  if (op === 'pause') return '已暂停自动续跑'
+  if (op === 'resume') return '已恢复自动续跑'
+  if (op === 'clear') return '已清除当前目标'
+  if (op === 'create') return '已设定目标'
+  if (op === 'edit') return '已保存修改'
+  return '已更新'
+}
+
+async function onInbound({ appId, lark, msg, bridge, inboxRoot, cards, goalViews }) {
   const text = (msg.text || '').trim()
   const ackEmoji = text.toLowerCase() === '/stop' ? 'OK' : 'THUMBSUP'
   void lark.react(msg.messageId, ackEmoji)
@@ -172,7 +222,19 @@ async function onInbound({ appId, lark, msg, bridge, inboxRoot, cards }) {
     cards?.rejectAll(appId, msg.chatId, 'stop')
     const ok = bridge.stop(appId, msg.chatId)
     if (ok === 'goal') {
-      await lark.sendText(msg.chatId, '已停。Goal 已暂停，续跑用 /goal resume')
+      await lark.sendText(msg.chatId, '已停止。目标已暂停自动续跑，可在卡片上恢复，或发送 /goal resume。')
+      if (goalViews) {
+        const result = await bridge.runGoal(appId, msg.chatId, '/goal')
+        if (result.goal) {
+          await presentGoal({
+            views: goalViews,
+            lark,
+            appId,
+            chatId: msg.chatId,
+            goal: result.goal,
+          })
+        }
+      }
     } else {
       await lark.sendText(msg.chatId, ok ? '已停' : '当前没有在跑的任务')
     }
@@ -181,6 +243,7 @@ async function onInbound({ appId, lark, msg, bridge, inboxRoot, cards }) {
 
   if (text === '/clear') {
     cards?.rejectAll(appId, msg.chatId, 'clear')
+    await dismissGoal(goalViews, lark, appId, msg.chatId, '会话已清空。')
     await bridge.clear(appId, msg.chatId)
     await lark.sendText(msg.chatId, '已清空，下一句会开新会话')
     return
@@ -208,6 +271,7 @@ async function onInbound({ appId, lark, msg, bridge, inboxRoot, cards }) {
 
   if (text === '/resume' || text.startsWith('/resume ')) {
     const token = text.slice('/resume'.length).trim()
+    if (token) await dismissGoal(goalViews, lark, appId, msg.chatId, '已切到别的会话。')
     const reply = await bridge.resumeAt(appId, msg.chatId, token)
     await lark.sendText(msg.chatId, reply)
     return
@@ -226,8 +290,19 @@ async function onInbound({ appId, lark, msg, bridge, inboxRoot, cards }) {
   }
 
   if (text === '/goal' || text.startsWith('/goal ')) {
-    const reply = await bridge.runGoal(appId, msg.chatId, text)
-    await lark.sendText(msg.chatId, reply)
+    const result = await bridge.runGoal(appId, msg.chatId, text)
+    if (!result.ok) {
+      await lark.sendText(msg.chatId, result.text)
+      return
+    }
+    await presentGoal({
+      views: goalViews,
+      lark,
+      appId,
+      chatId: msg.chatId,
+      goal: result.goal,
+      notice: noticeOfGoalLine(text),
+    })
     return
   }
 

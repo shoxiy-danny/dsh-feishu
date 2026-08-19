@@ -54,7 +54,7 @@ gh repo create shoxiy-danny/dsh-feishu --public --source=. --remote=origin --pus
 gh repo edit shoxiy-danny/dsh-feishu --add-topic dsh-plugin --add-topic dsh-bundle --add-topic dsh --add-topic feishu --add-topic lark
 ```
 
-市场按 GitHub topic + 定时扫描收录。推上去之后等下一轮扫描，或到 [dsh-plugin.market](https://dsh-plugin.market/) 按仓库名搜。
+市场按 GitHub topic + 定时扫描收录。发现按 `created` 分片从旧仓往新仓啃，每小时最多 400。新仓常要等十来个小时。插队：打开 [提交页](https://dsh-plugin.market/submit) 贴仓库 URL。`POST /api/submit` 在 2026-08-19 对合法仓一律 500，页面多半也是同一个接口。
 
 ## 和自用原版的关系
 

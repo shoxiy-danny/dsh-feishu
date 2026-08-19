@@ -1,7 +1,7 @@
 {
   "name": "dsh-feishu",
-  "version": "0.1.1",
-  "description": "Feishu / Lark surface for DeepSeek Harness. No web UI. Chat, slash commands, progress, Goal, multi-bot.",
+  "version": "0.1.2",
+  "description": "The harness lives in Feishu, on a Linux server. Goal cards, live progress, multi-bot. Not a remote for the webpage.",
   "type": "module",
   "main": "src/index.js",
   "license": "MIT",

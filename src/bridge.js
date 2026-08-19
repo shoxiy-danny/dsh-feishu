@@ -272,60 +272,72 @@ export function createBridge(ctx, options) {
     return held ? readGoal(held.handle.agent) : null
   }
 
+  function goalResult(ok, text, goal) {
+    return { ok, text, goal: goal || null }
+  }
+
   async function runGoal(appId, chatId, line) {
     const handle = await ensure(appId, chatId)
     const trimmed = String(line || '').trim()
-    if (trimmed === '/goal') return formatGoalStatus(readGoal(handle.agent))
+    if (trimmed === '/goal') {
+      const goal = readGoal(handle.agent)
+      return goalResult(true, formatGoalStatus(goal), goal)
+    }
 
     const rest = trimmed.replace(/^\/goal\s*/i, '')
     const control = rest.toLowerCase()
     if (control === 'pause' || control === 'resume' || control === 'clear') {
       const commands = ctx.get('commands')
-      if (!commands?.execute) return 'Goal 命令服务不可用'
+      if (!commands?.execute) return goalResult(false, 'Goal 命令服务不可用', null)
       try {
         const exec = await commands.execute(handle.agent, trimmed, new AbortController().signal)
-        if (!exec) return formatGoalStatus(null)
-        if (exec.result.kind === 'error') return formatGoalError(exec.result.text)
+        if (!exec) return goalResult(true, formatGoalStatus(null), null)
+        if (exec.result.kind === 'error') {
+          return goalResult(false, formatGoalError(exec.result.text), readGoal(handle.agent))
+        }
         const after = readGoal(handle.agent)
-        if (after) return formatGoalStatus(after)
-        return '已清除。再设用 /goal <目标>'
+        if (after) return goalResult(true, formatGoalStatus(after), after)
+        return goalResult(true, '已清除。再设用 /goal <目标>', null)
       } catch (err) {
         process.stderr.write(`[dsh-feishu] /goal failed: ${err}\n`)
-        return `Goal 失败：${err?.message || err}`
+        return goalResult(false, `Goal 失败：${err?.message || err}`, readGoal(handle.agent))
       }
     }
 
     const goals = ctx.get('goals')
-    if (!goals) return 'Goal 服务不可用'
+    if (!goals) return goalResult(false, 'Goal 服务不可用', null)
     const isEdit = /^edit(?=\s)/iu.test(rest)
     const rawObj = isEdit ? rest.replace(/^edit\s+/iu, '').trim() : rest
     const { objective, maxGoalRounds } = parseGoalObjective(rawObj)
     if (!objective) {
-      return isEdit
-        ? '改目标要带新内容。例：/goal edit 把 README 补上安装步骤'
-        : '目标不能为空。轮次写在后面，例：/goal 写个文件，最多跑3轮'
+      return goalResult(false, isEdit
+        ? '修改目标时必须填写新内容。'
+        : '目标不能为空。可在句末写「最多跑3轮」。', readGoal(handle.agent))
     }
 
     const request = maxGoalRounds ? { objective, maxGoalRounds } : { objective }
     const current = readGoal(handle.agent)
     try {
       if (isEdit) {
-        if (!current) return '当前没有 Goal。先 /goal <目标> 设定。'
+        if (!current) return goalResult(false, '当前没有目标。请先设定后再修改。', null)
         if (current.phase === 'complete') {
-          return formatGoalStatus(goals.create(handle.agent, request))
+          const created = goals.create(handle.agent, request)
+          return goalResult(true, formatGoalStatus(created), created)
         }
-        return formatGoalStatus(goals.edit(handle.agent, {
+        const edited = goals.edit(handle.agent, {
           id: current.id,
           revision: current.revision,
-        }, request))
+        }, request)
+        return goalResult(true, formatGoalStatus(edited), edited)
       }
       if (current && current.phase !== 'complete') {
-        return '已经有未完成的 Goal。改目标用 /goal edit <目标>，换新的先 /goal clear。'
+        return goalResult(false, '已有未完成的目标。请先修改当前目标，或清除后再设定新目标。', current)
       }
-      return formatGoalStatus(goals.create(handle.agent, request))
+      const created = goals.create(handle.agent, request)
+      return goalResult(true, formatGoalStatus(created), created)
     } catch (err) {
       process.stderr.write(`[dsh-feishu] /goal mutate failed: ${err}\n`)
-      return formatGoalError(err?.message || String(err))
+      return goalResult(false, formatGoalError(err?.message || String(err)), readGoal(handle.agent))
     }
   }
 

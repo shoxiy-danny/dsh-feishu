@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import { goalCard, lockedCard } from './cards.js'
+
 const NEAR_REMAINING = 3
 
 const PHASE_ZH = {
@@ -8,22 +11,9 @@ const PHASE_ZH = {
 }
 
 export const EMPTY_GOAL_HELP = [
-  '当前没有 Goal。',
-  '',
-  '设一个目标后，我会自己多轮推进，直到完成、阻塞或轮次用尽。',
-  '进程重启 / 切会话后不会自动续跑，要显式 /goal resume。',
-  '',
-  '用法：',
-  '/goal <目标>        设定并开始推进；可在句末写「最多跑3轮」',
-  '/goal               查看当前状态',
-  '/goal edit <目标>   改目标，不换阶段',
-  '/goal pause         暂停自动续跑',
-  '/goal resume        续跑（停过 / 重启后）',
-  '/goal clear         清掉当前 Goal',
-  '',
-  '例子：',
-  '/goal 在当前目录补一份 README 安装步骤，最多跑3轮',
-  '/goal 把这个目录的测试补上，写完对照仓库核实',
+  '当前没有进行中的目标。填写后点「设定并开始」。',
+  '进程重启或切换会话后不会自动续跑，需要点「恢复自动续跑」。',
+  '也可继续使用斜杠命令：`/goal <目标>`，句末可写「最多跑3轮」。',
 ].join('\n')
 
 const ROUND_PATTERNS = [
@@ -50,24 +40,24 @@ export function parseGoalObjective(raw) {
 export function formatGoalError(text) {
   const raw = String(text || '')
   if (/already/i.test(raw) && /active|paused|blocked/i.test(raw)) {
-    return '已经有未完成的 Goal。改目标用 /goal edit <目标>，换新的先 /goal clear。'
+    return '已有未完成的目标。请先修改当前目标，或清除后再设定新目标。'
   }
   if (/No goal is currently set/i.test(raw) || /requires one/i.test(raw)) {
-    return '当前没有 Goal。先 /goal <目标> 设定。'
+    return '当前没有目标。请先设定后再操作。'
   }
   if (/replacement objective/i.test(raw) || /invalid-edit|Goal editing requires/i.test(raw)) {
-    return '改目标要带新内容。例：/goal edit 把 README 补上安装步骤'
+    return '修改目标时必须填写新内容。'
   }
   if (/not valid for the current state/i.test(raw)) {
-    return '这个操作对当前状态无效。发 /goal 看能做什么。'
+    return '当前状态不支持该操作。请发送 /goal 查看可执行项。'
   }
-  return raw || 'Goal 命令失败'
+  return raw || '目标操作失败'
 }
 
 export function formatGoalStatus(goal) {
   if (!goal) return EMPTY_GOAL_HELP
   const phase = PHASE_ZH[goal.phase] || goal.phase
-  const armed = goal.activation === 'armed' ? '已武装（会自动续轮）' : '未武装（要 /goal resume 才续跑）'
+  const armed = goal.activation === 'armed' ? '已武装（会自动续轮）' : '未武装（需恢复自动续跑）'
   const lines = [
     `Goal：${phase}`,
     `目标：${goal.objective}`,
@@ -82,11 +72,11 @@ export function formatGoalStatus(goal) {
 }
 
 function hintZh(goal) {
-  if (goal.phase === 'complete') return '/goal <新目标> 或 /goal clear'
+  if (goal.phase === 'complete') return '设定新目标，或清除当前目标'
   if (goal.phase === 'active' && goal.activation === 'armed') {
-    return '/goal edit <目标>  /  /goal pause  /  /goal clear'
+    return '可修改目标、暂停自动续跑，或清除当前目标'
   }
-  return '/goal resume  /  /goal edit <目标>  /  /goal clear'
+  return '可恢复自动续跑、修改目标，或清除当前目标'
 }
 
 export function formatGoalTag(goal) {
@@ -99,13 +89,219 @@ export function formatGoalTag(goal) {
   return ` G${rounds}${near}`
 }
 
-export function attachGoal(ctx, { routeOf }) {
+export function goalActions(goal) {
+  if (!goal) return []
+  if (goal.phase === 'complete') {
+    return [{ op: 'clear', label: '清除当前目标', type: 'default' }]
+  }
+  const actions = []
+  if (goal.phase === 'active' && goal.activation === 'armed') {
+    actions.push({ op: 'pause', label: '暂停自动续跑', type: 'default' })
+  } else {
+    actions.push({ op: 'resume', label: '恢复自动续跑', type: 'primary' })
+  }
+  actions.push({ op: 'clear', label: '清除当前目标', type: 'danger' })
+  return actions
+}
+
+export function goalForm(goal) {
+  if (!goal || goal.phase === 'complete') {
+    return {
+      op: 'create',
+      field: 'objective',
+      label: '目标',
+      placeholder: '描述要完成的事项。句末可写「最多跑3轮」',
+      submit: '设定并开始',
+    }
+  }
+  return {
+    op: 'edit',
+    field: 'objective',
+    label: '修改目标',
+    placeholder: '填写新的目标内容。句末可写「最多跑3轮」',
+    defaultValue: goal.objective,
+    submit: '保存修改',
+  }
+}
+
+export function noticeOfGoalLine(line) {
+  const rest = String(line || '').trim().replace(/^\/goal\s*/i, '')
+  if (!rest) return undefined
+  const control = rest.toLowerCase()
+  if (control === 'pause' || control === 'resume' || control === 'clear') return control
+  if (/^edit(?=\s)/iu.test(rest)) return 'edit'
+  return 'create'
+}
+
+export function buildGoalCard(id, goal, notice) {
+  return goalCard({
+    id,
+    title: goalCardTitle(goal, notice),
+    template: goalCardTemplate(goal),
+    body: goalCardBody(goal, notice),
+    actions: goalActions(goal),
+    form: goalForm(goal),
+  })
+}
+
+function goalCardTitle(goal, notice) {
+  if (!goal) return notice === 'clear' ? '目标已清除' : '当前没有目标'
+  if (notice === 'complete' || goal.phase === 'complete') return '目标已完成'
+  if (notice === 'block' || goal.phase === 'blocked') return '目标已阻塞'
+  if (goal.phase === 'paused') return '目标已暂停'
+  return '目标进行中'
+}
+
+function goalCardTemplate(goal) {
+  if (!goal) return 'grey'
+  if (goal.phase === 'complete') return 'green'
+  if (goal.phase === 'blocked') return 'red'
+  if (goal.phase === 'paused') return 'yellow'
+  if (goal.activation !== 'armed') return 'orange'
+  return 'blue'
+}
+
+function goalCardBody(goal, notice) {
+  const lead = noticeLine(notice)
+  if (!goal) return [lead, EMPTY_GOAL_HELP].filter(Boolean).join('\n\n')
+  const phase = PHASE_ZH[goal.phase] || goal.phase
+  const armed = goal.activation === 'armed'
+    ? '已武装，会自动续轮'
+    : '未武装，需点「恢复自动续跑」'
+  const lines = []
+  if (lead) lines.push(lead)
+  lines.push(`**目标** ${goal.objective}`)
+  if (goal.phase === 'blocked' && goal.blockedReason) {
+    lines.push(`**阻塞** ${goal.blockedReason.code}: ${goal.blockedReason.message}`)
+  }
+  lines.push(`阶段：${phase} · 轮次 ${goal.roundsStarted}/${goal.maxGoalRounds}`)
+  lines.push(`激活：${armed}`)
+  lines.push('')
+  lines.push(cardHint(goal))
+  return lines.join('\n')
+}
+
+function noticeLine(notice) {
+  if (notice === 'complete') return '**已完成。**'
+  if (notice === 'block') return '**已阻塞。**'
+  if (notice === 'pause') return '已暂停自动续跑。'
+  if (notice === 'resume') return '已恢复自动续跑。'
+  if (notice === 'clear') return '已清除当前目标。'
+  if (notice === 'create') return '已设定目标。'
+  if (notice === 'edit') return '已保存目标修改。'
+  return ''
+}
+
+function cardHint(goal) {
+  if (!goal || goal.phase === 'complete') {
+    return '在下方填写新目标后提交。斜杠命令 `/goal <目标>` 仍然可用。'
+  }
+  return '在下方修改目标后提交。斜杠命令 `/goal edit <目标>` 仍然可用。'
+}
+
+export function createGoalViews() {
+  const byToken = new Map()
+  const byChat = new Map()
+
+  function keyOf(appId, chatId) {
+    return `${appId}::${chatId}`
+  }
+
+  function get(token) {
+    return byToken.get(String(token || '')) || null
+  }
+
+  function current(appId, chatId) {
+    const token = byChat.get(keyOf(appId, chatId))
+    return token ? byToken.get(token) || null : null
+  }
+
+  function put(rec) {
+    const key = keyOf(rec.appId, rec.chatId)
+    const prevToken = byChat.get(key)
+    if (prevToken && prevToken !== rec.id) byToken.delete(prevToken)
+    byChat.set(key, rec.id)
+    byToken.set(rec.id, rec)
+  }
+
+  function forget(appId, chatId) {
+    const key = keyOf(appId, chatId)
+    const token = byChat.get(key)
+    if (!token) return null
+    const rec = byToken.get(token) || null
+    byChat.delete(key)
+    byToken.delete(token)
+    return rec
+  }
+
+  return { get, current, put, forget }
+}
+
+export async function dismissGoal(views, lark, appId, chatId, body) {
+  const rec = views?.forget(appId, chatId)
+  if (!rec?.messageId || !lark?.editCard) return rec
+  void lark.editCard(rec.messageId, lockedCard({
+    title: '目标已失效',
+    template: 'grey',
+    body: body || '会话已清空。',
+  })).catch((err) => {
+    process.stderr.write(`[dsh-feishu] goal card dismiss failed: ${err}\n`)
+  })
+  return rec
+}
+
+export async function presentGoal({ views, lark, appId, chatId, goal, notice, replace = true }) {
+  const id = randomUUID()
+  const card = buildGoalCard(id, goal, notice)
+  const prev = views.current(appId, chatId)
+
+  if (replace && prev?.messageId) {
+    try {
+      const ok = await lark.editCard(prev.messageId, card)
+      if (ok) {
+        views.put({ id, appId, chatId, messageId: prev.messageId, lark })
+        return prev.messageId
+      }
+    } catch (err) {
+      process.stderr.write(`[dsh-feishu] goal card edit failed: ${err}\n`)
+    }
+  }
+
+  if (prev?.messageId) {
+    void lark.editCard(prev.messageId, lockedCard({
+      title: '目标已更新',
+      template: 'grey',
+      body: '请查看下方新卡片。',
+    })).catch((err) => {
+      process.stderr.write(`[dsh-feishu] goal card lock failed: ${err}\n`)
+    })
+  }
+
+  const messageId = await lark.sendCard(chatId, card)
+  views.put({ id, appId, chatId, messageId, lark })
+  return messageId
+}
+
+export function attachGoal(ctx, { routeOf, views }) {
   ctx.on('goal/changed', ({ agent, change }) => {
     const route = routeOf(agent.id)
     if (!route?.chatId || !route.lark) return
     const op = change?.operation
     if (op !== 'complete' && op !== 'block') return
     const goal = change.goal
+    if (views && route.appId) {
+      void presentGoal({
+        views,
+        lark: route.lark,
+        appId: route.appId,
+        chatId: route.chatId,
+        goal,
+        notice: op === 'block' ? 'block' : 'complete',
+      }).catch((err) => {
+        process.stderr.write(`[dsh-feishu] goal notify failed: ${err}\n`)
+      })
+      return
+    }
     const rounds = goal ? `${goal.roundsStarted}/${goal.maxGoalRounds}` : '?'
     let text
     if (op === 'complete') {
