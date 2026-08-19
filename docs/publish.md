@@ -56,6 +56,8 @@ gh repo edit shoxiy-danny/dsh-feishu --add-topic dsh-plugin --add-topic dsh-bund
 
 市场按 GitHub topic + 定时扫描收录。发现按 `created` 分片从旧仓往新仓啃，每小时最多 400。新仓常要等十来个小时。插队：打开 [提交页](https://dsh-plugin.market/submit) 贴仓库 URL。`POST /api/submit` 在 2026-08-19 对合法仓一律 500，页面多半也是同一个接口。
 
+市场卡片预览：先 GitHub 社交预览，没有就抓 README 第一张 jpg/png。路径里带 `logo` / `icon` / `avatar` 的图、以及 SVG，一律跳过。所以 README 里 `assets/logo.jpg` 当头像，`assets/hero.jpg` 当第一张产品图。
+
 ## 和自用原版的关系
 
 自用仓继续跑私有配置、私有模型、私有记忆路径。这个公开仓是一份独立拷贝。改公开版不要回写自用版，除非你明确要同步某一处。

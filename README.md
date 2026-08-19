@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/mark.jpg" width="128" alt="dsh-feishu mark">
+  <img src="assets/logo.jpg" width="128" alt="dsh-feishu">
 </p>
 
 <h1 align="center">dsh-feishu</h1>
@@ -37,6 +37,10 @@
 2. **Goal 卡片** — 设定、改目标、暂停、恢复、清除，点卡片就能做；重启不偷着续
 3. **一进程多 bot** — 2～3 个飞书身份共用一套 Agent，同一条 session 不能两头同时握
 4. **会变的进度头** — `[dsf-23% G1/3] Using bash...(2)`，不是「正在思考…」四个字一直挂着
+
+<p align="center">
+  <img src="assets/cards.png" width="960" alt="Goal card, approval card, ask card">
+</p>
 
 GitHub 上另有一个 [`PGZXB/dsh-feishu`](https://github.com/PGZXB/dsh-feishu)，飞书控制台 + 卡内审批，官方 Web 还在。owner 不同，产品也不同。
 
@@ -174,6 +178,8 @@ We do not compete on button count. No typewriter answer card. Four things instea
 2. **Goal card** — set, edit, pause, resume, clear on the card; a restart will not keep burning tokens until you resume
 3. **Several bots, one process** — 2–3 Feishu identities, one agent; one session cannot be held by two windows
 4. **A progress header that changes** — `[dsf-23% G1/3] Using bash...(2)`, not a frozen "Thinking…"
+
+The three cards below are drawn from the real card JSON. They are not Feishu screenshots.
 
 There is another GitHub repo named [`PGZXB/dsh-feishu`](https://github.com/PGZXB/dsh-feishu): a Feishu console with in-card approvals, official web still on. Different owner, different product.
 
