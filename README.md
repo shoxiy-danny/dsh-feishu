@@ -8,7 +8,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/dsh--plugin-Feishu-3370ff" alt="dsh-plugin">
   <img src="https://img.shields.io/badge/UI-Feishu_only-00d6b9" alt="Feishu only">
-  <img src="https://img.shields.io/badge/deploy-Linux_server-222222" alt="Linux server">
+  <img src="https://img.shields.io/badge/deploy-headless-222222" alt="headless">
   <img src="https://img.shields.io/badge/runtime-Node_22-339933" alt="Node 22">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT">
 </p>
@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/hero.jpg" width="720" alt="Linux server and a Feishu chat, no webpage">
+  <img src="assets/hero.jpg" width="100%" alt="dsh-feishu: Harness 长在飞书里，不是飞书遥控网页">
 </p>
 
 ---
@@ -27,7 +27,7 @@
 
 插件市场里 `feishu` / `lark` 已经三十多个。多数是通知器、多 IM 网关，或 `dsh plugin --profile web add` 之后挂在官方网页旁边的桥。飞书只是遥控器：网页还在，关掉浏览器，产品就少了一半。不少还默认你坐在个人 PC 前，终端里弹二维码。
 
-这套是跑在飞书里的 harness，部署面是 **Linux 服务器**。一个 `dsh --profile feishu` 当守护进程常驻，日志进文件，没有要人盯着的 TTY。飞书长连接进、飞书卡片出。模型、斜杠命令、进度、Goal、会话，全部发生在聊天框。没有 3080，没有给本机用的 TUI。高危操作出飞书审批卡，不是网页弹窗。
+这套是跑在飞书里的 harness，部署面是 **无头常驻**：macOS、Linux、WSL 都能跑，主打一台能出网的机器当守护进程，不是笔记本终端扫码。一个 `dsh --profile feishu` 常驻，日志进文件，没有要人盯着的 TTY。飞书长连接进、飞书卡片出。模型、斜杠命令、进度、Goal、会话，全部发生在聊天框。没有 3080，没有给本机用的 TUI。高危操作出飞书审批卡，不是网页弹窗。
 
 首个 bot 只能在开放平台建好，把 App ID / Secret 写进环境变量再启动。服务器上没处可贴二维码。已经通了的 bot 再开第二个，码可以打回飞书；那是后话，不是第一次上手。
 
@@ -103,14 +103,14 @@ Agent 自己多轮推进。进程重启后 **不会** 偷偷接着烧，要在�
 <a id="who"></a>
 ## 适合谁 / 不适合谁
 
-适合：有一台 Linux 服务器，要把 dsh 做成 7×24 云端同事；已经在飞书办公、不想再为 Agent 开网页或守着笔记本终端；同一套 Agent 多个飞书身份；Goal 这种「交代完让它自己盯」，但中断和续跑必须自己说了算。
+适合：有一台能出网的机器，要把 dsh 做成 7×24 云端同事；已经在飞书办公、不想再为 Agent 开网页或守着笔记本终端；同一套 Agent 多个飞书身份；Goal 这种「交代完让它自己盯」，但中断和续跑必须自己说了算。
 
 不适合：个人 PC 上扫码 30 秒上手、还想留官方 Web 控制台、需要打字机流式答案卡、或只把飞书当通知渠道。那些货架上已经很多，去搜 `feishu` 即可。
 
 <a id="install"></a>
 ## 五分钟跑起来
 
-面向一台已经能出网的 Linux 机器。需要 Node 22 和已安装的 `dsh`（`npm i -g @deepseek-ai/dsh`）。
+面向一台已经能出网的机器（Linux / macOS / WSL；Windows 原生机也能起进程，Agent 调 bash 会别扭）。需要 Node 22 和已安装的 `dsh`（`npm i -g @deepseek-ai/dsh`）。
 
 先在飞书开放平台建一个**企业自建应用**，事件订阅用长连接（WebSocket），不要 webhook。把 App ID / Secret 备好再部署。步骤见 [docs/feishu-setup.md](docs/feishu-setup.md)。
 
@@ -156,7 +156,7 @@ chmod +x scripts/*.sh scripts/dsh-feishu-cli
 | [docs/publish.md](docs/publish.md) | 作者：GitHub topic 和市场收录 |
 | [examples/](examples/) | 模型表、profile overlay 样例 |
 
-默认模型只有 DeepSeek 官方 `dsf` / `dsp`。加自己的供应商见手册「模型」一节。
+默认模型只有 DeepSeek 官方 `dsf` / `dsp`。加自己的供应商：手册「模型」一节按字段说明，不按厂商抄作业。样例骨架在 `examples/`。
 
 需要 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)。发现页：[dsh-plugin.market](https://dsh-plugin.market/)。
 
@@ -168,7 +168,7 @@ chmod +x scripts/*.sh scripts/dsh-feishu-cli
 
 The plugin market already has thirty-plus `feishu` / `lark` listings. Most are notifiers, multi-IM gateways, or bridges you add with `dsh plugin --profile web add`. Feishu is only a remote: the webpage is still there, and closing the browser takes half the product with it.
 
-This is the harness, running in Feishu, meant for a **Linux server**, not a laptop you scan a terminal QR on. One `dsh --profile feishu` as a daemon. Logs go to a file. Nobody has to watch a TTY. Feishu WebSocket in, Feishu card out. Models, slash commands, progress, Goal, sessions: all in chat. No port 3080. No desktop TUI. High-risk commands pause on a Feishu approval card, not a web popup.
+This is the harness, running in Feishu, meant as a **headless daemon** on a box that stays on: Linux, macOS, or WSL. Not a laptop you scan a terminal QR on. One `dsh --profile feishu`. Logs go to a file. Nobody has to watch a TTY. Feishu WebSocket in, Feishu card out. Models, slash commands, progress, Goal, sessions: all in chat. No port 3080. No desktop TUI. High-risk commands pause on a Feishu approval card, not a web popup.
 
 The first bot has to be created on the open platform and dropped into env vars. A headless server has nowhere to put a QR code. Extra bots can later be opened from an already-working chat; that is not how you bootstrap.
 
@@ -227,7 +227,7 @@ Unnamed `rm`, `find -delete`, and destructive git pause on an orange card. Tap *
 
 ## Five minutes
 
-Aimed at a Linux box that can reach the internet. Need Node 22 and `dsh` (`npm i -g @deepseek-ai/dsh`).
+Aimed at a machine that can reach the internet (Linux / macOS / WSL; a raw Windows box will start, but the agent’s bash calls will fight you). Need Node 22 and `dsh` (`npm i -g @deepseek-ai/dsh`).
 
 Create a Feishu **enterprise self-built app** first. Subscribe to events over **WebSocket**, not webhook. Have App ID / Secret ready before you deploy. Details: [docs/feishu-setup.md](docs/feishu-setup.md).
 
@@ -266,7 +266,7 @@ Default cwd is the home directory; attachments land in `workspace/inbox/`. A sec
 
 ## Who this is for / not for
 
-For: you have a Linux server and want dsh as a 24/7 coworker; you already live in Feishu and do not want another Agent webpage or a laptop terminal to babysit; one agent, several Feishu identities; Goal ("leave it running") with pause / resume that you say out loud.
+For: you have a machine that stays on and want dsh as a 24/7 coworker; you already live in Feishu and do not want another Agent webpage or a laptop terminal to babysit; one agent, several Feishu identities; Goal ("leave it running") with pause / resume that you say out loud.
 
 Not for: 30-second QR setup on a personal PC; people who still want the official web console or typewriter streaming cards; or Feishu-as-notifications-only. The market already has those. Search `feishu`.
 
@@ -279,7 +279,7 @@ Not for: 30-second QR setup on a personal PC; people who still want the official
 | [docs/publish.md](docs/publish.md) | Author: GitHub topics and market listing |
 | [examples/](examples/) | Model table and profile overlay samples |
 
-Ships DeepSeek official aliases only: `dsf` / `dsp`. Extra providers: see the handbook.
+Ships DeepSeek official aliases only: `dsf` / `dsp`. Extra providers: handbook §模型 (per-field, not per-vendor). Skeleton in `examples/`.
 
 Requires [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). Discovery: [dsh-plugin.market](https://dsh-plugin.market/).
 
