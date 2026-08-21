@@ -585,12 +585,30 @@ export function createBridge(ctx, options) {
     return true
   }
 
+  async function warmup() {
+    const warmed = []
+    for (const [key, entry] of Object.entries(chats)) {
+      if (!entry.sessionId) continue
+      const { appId, chatId } = parseKey(key)
+      if (appId === 'cli') continue
+      try {
+        await ensure(appId, chatId)
+      } catch (err) {
+        process.stderr.write(`[dsh-feishu] warmup ${key}: ${err}\n`)
+        continue
+      }
+      const title = history.items.find((item) => item.id === String(entry.sessionId))?.title || ''
+      warmed.push({ appId, chatId, title, model: entry.model || '' })
+    }
+    return warmed
+  }
+
   return {
     deliver, stop, clear, setModel, status, compact, runGoal, goalOf,
     listResumeItems, listResumes, resumeAt, rename, waitIdle,
     chatOf, routeOf, selectionOf, selectionOfKey,
     windowOf: (sel) => modelWindow(MODELS, sel),
-    disposeAll,
+    disposeAll, warmup,
   }
 }
 

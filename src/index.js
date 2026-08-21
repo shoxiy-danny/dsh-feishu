@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createBridge } from './bridge.js'
@@ -59,11 +59,73 @@ export function apply(ctx) {
     }
   })
 
-  void boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }).then((started) => {
+  void boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }).then(async (started) => {
     handles.push(...started)
+    void announceRestart({ bots, bridge })
   }).catch((err) => {
     process.stderr.write(`[dsh-feishu] boot failed: ${err}\n`)
   })
+}
+
+// 重启后主动接上：warmup resume 所有已知会话，发绿头播报卡；若重启脚本写入了
+// $DSH_HOME/restart-continue.json（LLM 设计的续跑指令），卡片内展示并投进会话接着干
+async function announceRestart({ bots, bridge }) {
+  try {
+    const warmed = await bridge.warmup()
+    const cont = takeContinue(warmed)
+    for (const item of warmed) {
+      const lark = bots.get(item.appId)
+      if (!lark) continue
+      const bits = [
+        item.title ? `会话「${item.title}」` : '',
+        item.model && item.model !== '?' ? `模型 ${item.model}` : '',
+      ].filter(Boolean).join(' · ')
+      let body = `${bits ? bits + ' · ' : ''}已接上，直接说话就行。`
+      if (cont && item.appId === cont.appId && item.chatId === cont.chatId) {
+        body += `\n---\n**续跑指令**\n${cont.text}`
+      }
+      await lark.sendCard(item.chatId, lockedCard({ title: '已重启', template: 'green', body }))
+    }
+    process.stderr.write(`[dsh-feishu] restart announce sent chats=${warmed.length}\n`)
+    if (cont) {
+      process.stderr.write(`[dsh-feishu] continue -> ${cont.appId}::${cont.chatId}: ${String(cont.text).slice(0, 80)}\n`)
+      await bridge.deliver(cont.appId, cont.chatId, String(cont.text))
+    }
+  } catch (err) {
+    process.stderr.write(`[dsh-feishu] restart announce failed: ${err}\n`)
+  }
+}
+
+// 续跑指令文件：读出并立即消费（防崩溃重投），10 分钟过期
+function takeContinue(warmed) {
+  const file = join(process.env.DSH_HOME || '', 'restart-continue.json')
+  let raw
+  try {
+    raw = readFileSync(file, 'utf8')
+  } catch {
+    return null
+  }
+  try { writeFileSync(file, JSON.stringify({ consumed: true }) + '\n') } catch { /* ignore */ }
+  let data
+  try {
+    data = JSON.parse(raw)
+  } catch {
+    process.stderr.write('[dsh-feishu] continue file unparsable\n')
+    return null
+  }
+  if (!data?.text || Date.now() - (data.ts || 0) > 10 * 60_000) {
+    process.stderr.write('[dsh-feishu] continue skipped: empty or expired\n')
+    return null
+  }
+  if (typeof data.chatKey === 'string' && data.chatKey.includes('::')) {
+    const i = data.chatKey.indexOf('::')
+    return { appId: data.chatKey.slice(0, i), chatId: data.chatKey.slice(i + 2), text: String(data.text) }
+  }
+  if (warmed.length === 1) {
+    return { appId: warmed[0].appId, chatId: warmed[0].chatId, text: String(data.text) }
+  }
+  process.stderr.write('[dsh-feishu] continue skipped: no target chat\n')
+  return null
 }
 
 function readBots() {

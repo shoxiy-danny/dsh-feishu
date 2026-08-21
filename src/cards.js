@@ -81,22 +81,43 @@ export function approvalCard({ id, kind, command }) {
     },
     body: {
       elements: [
-        { tag: 'markdown', content: `模型想执行下面这条命令。\n原因：\`${kind}\`` },
+        {
+          tag: 'markdown',
+          content: `<font color='red'>**危险命令，默认拒绝**</font>　<font color='grey'>触发：\`${kind}\`</font>`,
+        },
         { tag: 'hr' },
         { tag: 'markdown', content: '```bash\n' + clip(command) + '\n```' },
         {
-          tag: 'button',
-          element_id: `deny_${id.slice(0, 8)}`,
-          type: 'default',
-          text: { tag: 'plain_text', content: '拒绝' },
-          behaviors: [{ type: 'callback', value: { kind: 'guard', token: id, verdict: 'deny' } }],
-        },
-        {
-          tag: 'button',
-          element_id: `allow_${id.slice(0, 8)}`,
-          type: 'danger',
-          text: { tag: 'plain_text', content: '允许这一次' },
-          behaviors: [{ type: 'callback', value: { kind: 'guard', token: id, verdict: 'allow' } }],
+          tag: 'column_set',
+          flex_mode: 'bisect',
+          columns: [
+            {
+              tag: 'column',
+              width: 'weighted',
+              weight: 1,
+              vertical_align: 'top',
+              elements: [{
+                tag: 'button',
+                element_id: `deny_${id.slice(0, 8)}`,
+                type: 'default',
+                text: { tag: 'plain_text', content: '拒绝' },
+                behaviors: [{ type: 'callback', value: { kind: 'guard', token: id, verdict: 'deny' } }],
+              }],
+            },
+            {
+              tag: 'column',
+              width: 'weighted',
+              weight: 1,
+              vertical_align: 'top',
+              elements: [{
+                tag: 'button',
+                element_id: `allow_${id.slice(0, 8)}`,
+                type: 'danger',
+                text: { tag: 'plain_text', content: '允许这一次' },
+                behaviors: [{ type: 'callback', value: { kind: 'guard', token: id, verdict: 'allow' } }],
+              }],
+            },
+          ],
         },
       ],
     },
@@ -105,27 +126,21 @@ export function approvalCard({ id, kind, command }) {
 
 export function askCard({ id, header, question, detail, options }) {
   const token = String(id || '')
+  const opts = (options || []).map((opt, i) => ({
+    n: i + 1,
+    value: opt.label,
+    label: (String(opt.label || '').trim() || `选项 ${i + 1}`).slice(0, 40),
+    description: opt.description ? String(opt.description).trim() : '',
+  }))
   const elements = [
-    { tag: 'markdown', content: header ? `**${header}**\n${question}` : `**${question}**` },
+    { tag: 'markdown', content: `**${question}**` },
   ]
   if (detail) elements.push({ tag: 'markdown', content: String(detail) })
-  if (options?.length) {
-    for (const [i, opt] of options.entries()) {
-      const label = String(opt.label || '').slice(0, 40)
-      elements.push({
-        tag: 'button',
-        element_id: eid('opt', token, i),
-        type: i === 0 ? 'primary' : 'default',
-        text: { tag: 'plain_text', content: label || `选项 ${i + 1}` },
-        behaviors: [{ type: 'callback', value: { kind: 'ask', token, opt: opt.label } }],
-      })
-      if (opt.description) {
-        elements.push({ tag: 'markdown', content: `_${opt.description}_` })
-      }
-    }
-    elements.push({ tag: 'markdown', content: '也可在下方填写后提交，或直接回复本条消息。先提交的为准。' })
-  } else {
-    elements.push({ tag: 'markdown', content: '请在下方填写后提交，或直接回复本条消息。' })
+  if (opts.length && opts.some((o) => o.description)) {
+    const menu = opts
+      .map((o) => `**${o.n}. ${o.label}**${o.description ? `　<font color='grey'>${o.description}</font>` : ''}`)
+      .join('\n')
+    elements.push({ tag: 'markdown', content: menu })
   }
   elements.push(inputForm({
     formName: `ask_${safeId(token)}`,
@@ -139,6 +154,21 @@ export function askCard({ id, header, question, detail, options }) {
     submit: '提交回答',
     required: true,
   }))
+  if (opts.length) {
+    elements.push({ tag: 'hr' })
+    for (let i = 0; i < opts.length; i += 2) {
+      elements.push(askButtonRow(token, opts.slice(i, i + 2)))
+    }
+    elements.push({
+      tag: 'markdown',
+      content: `<font color='grey'>点选项或直接打字回复，先到的算数。</font>`,
+    })
+  } else {
+    elements.push({
+      tag: 'markdown',
+      content: `<font color='grey'>填框提交，或直接打字回复。</font>`,
+    })
+  }
   return {
     schema: '2.0',
     config: { update_multi: true },
@@ -148,6 +178,26 @@ export function askCard({ id, header, question, detail, options }) {
     },
     body: { elements },
   }
+}
+
+function askButtonRow(token, opts) {
+  const columns = opts.map((o) => ({
+    tag: 'column',
+    width: 'weighted',
+    weight: 1,
+    vertical_align: 'top',
+    elements: [{
+      tag: 'button',
+      element_id: eid('opt', token, o.n - 1),
+      type: o.n === 1 ? 'primary' : 'default',
+      text: { tag: 'plain_text', content: `${o.n} · ${o.label}`.slice(0, 40) },
+      behaviors: [{ type: 'callback', value: { kind: 'ask', token, opt: o.value } }],
+    }],
+  }))
+  if (columns.length === 1) {
+    columns.push({ tag: 'column', width: 'weighted', weight: 1, elements: [] })
+  }
+  return { tag: 'column_set', flex_mode: 'bisect', columns }
 }
 
 export function lockedCard({ title, template, body }) {
@@ -167,7 +217,7 @@ export function lockedCard({ title, template, body }) {
 export function resumeCard({ id, items }) {
   const token = String(id || '')
   const elements = [
-    { tag: 'markdown', content: '点一条切过去。占用中的不能同时握。点「都不选」留在当前。也可 `/resume 2`。' },
+    { tag: 'markdown', content: `<font color='grey'>点一条切过去；占用中的不能同时握。也可直接发 \`/resume 2\`。</font>` },
   ]
   for (const [i, item] of (items || []).entries()) {
     const n = Number(item.n || i + 1)
@@ -177,7 +227,7 @@ export function resumeCard({ id, items }) {
     if (item.size) bits.push(item.size)
     if (item.busy) bits.push('占用')
     if (item.current) bits.push('当前')
-    const hint = bits.length ? `\n_${bits.join(' · ')}_` : ''
+    const hint = bits.length ? `\n<font color='grey'>${bits.join(' · ')}</font>` : ''
     elements.push({
       tag: 'button',
       element_id: eid('rb', token, i),
@@ -203,6 +253,67 @@ export function resumeCard({ id, items }) {
     },
     body: { elements },
   }
+}
+
+const MODEL_TIER_COLORS = { pro: 'blue', flash: 'green' }
+
+export function modelCard({ id, current, groups }) {
+  const token = String(id || '')
+  const elements = [
+    { tag: 'markdown', content: `当前 \`${current || '?'}\`。点一个切换，本会话记住；带别名直切（\`/model dsf\`）仍然可用。` },
+  ]
+  for (const group of groups || []) {
+    elements.push({ tag: 'hr' })
+    const color = MODEL_TIER_COLORS[group.key]
+    const title = color ? `<font color='${color}'>**${group.title}**</font>` : `**${group.title}**`
+    const hint = group.hint ? `　_${group.hint}_` : ''
+    elements.push({ tag: 'markdown', content: `${title}${hint}` })
+    const items = group.items || []
+    for (let i = 0; i < items.length; i += 2) {
+      elements.push(modelButtonRow(token, items.slice(i, i + 2), current))
+    }
+  }
+  elements.push({ tag: 'hr' })
+  elements.push({
+    tag: 'button',
+    element_id: eid('ms', token),
+    type: 'default',
+    text: { tag: 'plain_text', content: '都不选，保持当前' },
+    behaviors: [{ type: 'callback', value: { kind: 'model', token, op: 'stay' } }],
+  })
+  elements.push({ tag: 'markdown', content: '卡片 10 分钟内有效，过期后重发 /model 即可。' })
+  return {
+    schema: '2.0',
+    config: { update_multi: true },
+    header: {
+      title: { tag: 'plain_text', content: '切换模型' },
+      template: 'blue',
+    },
+    body: { elements },
+  }
+}
+
+function modelButtonRow(token, items, current) {
+  const columns = items.map((item) => {
+    const isCur = item.alias === current
+    return {
+      tag: 'column',
+      width: 'weighted',
+      weight: 1,
+      vertical_align: 'top',
+      elements: [{
+        tag: 'button',
+        element_id: eid('mb', token, item.alias),
+        type: isCur ? 'primary' : 'default',
+        text: { tag: 'plain_text', content: `${isCur ? '* ' : ''}${item.alias} · ${item.short || item.label}`.slice(0, 40) },
+        behaviors: [{ type: 'callback', value: { kind: 'model', token, alias: item.alias } }],
+      }],
+    }
+  })
+  if (columns.length === 1) {
+    columns.push({ tag: 'column', width: 'weighted', weight: 1, elements: [] })
+  }
+  return { tag: 'column_set', flex_mode: 'bisect', columns }
 }
 
 function resumeButtonLabel(item, n) {
@@ -276,7 +387,7 @@ function inputForm({
     required: required !== false,
     width: 'fill',
     input_type: 'multiline_text',
-    rows: 3,
+    rows: 1,
     auto_resize: true,
     max_length: 1000,
     placeholder: { tag: 'plain_text', content: placeholder || '请填写' },
@@ -285,6 +396,7 @@ function inputForm({
   if (defaultValue) input.default_value = String(defaultValue).slice(0, 1000)
   return {
     tag: 'form',
+    element_id: eid(`${prefix}f`, token),
     name: formName,
     elements: [
       input,
@@ -292,8 +404,8 @@ function inputForm({
         tag: 'button',
         element_id: eid(`${prefix}s`, token),
         type: 'primary',
-        action_type: 'form_submit',
         name: 'submit',
+        form_action_type: 'submit',
         text: { tag: 'plain_text', content: submit || '提交' },
         behaviors: [{ type: 'callback', value: { kind, token, op } }],
       },

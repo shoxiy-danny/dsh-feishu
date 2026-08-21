@@ -90,7 +90,11 @@ Agent 自己多轮推进。进程重启后 **不会** 偷偷接着烧，要在�
 
 未点名的 `rm`、`find -delete`、破坏性 git 会挂起，飞书出一张橙卡。点「允许这一次」才跑；打字同意不算批准。
 
-需要选择时模型调 `ask_user_question`，出蓝卡。可以点选项，也可以在卡内填空提交，也可以直接打字。先到的算数。开放平台须订 `card.action.trigger`。
+需要选择时模型调 `ask_user_question`，出蓝卡。选项两列一排带序号，说明是灰字菜单；可以点选项，也可以在卡内填空提交（输入框默认一行），也可以直接打字。先到的算数。开放平台须订 `card.action.trigger`。
+
+### 重启自己接上
+
+进程重启后不用你先说话：插件主动 resume 所有已知会话，发一张绿卡（会话名 + 模型名）。重启包装脚本可以把一句「续跑指令」写进 `$DSH_HOME/restart-continue.json`——绿卡里直接显示这条指令，并作为新消息投进会话，模型自己接着干。指令 10 分钟过期、读后即焚。
 
 ### 上下文会自己收
 
@@ -223,7 +227,11 @@ After 100K tokens, large read / glob / grep / bash / search results stay intact 
 
 ### Approval cards / ask-user cards
 
-Unnamed `rm`, `find -delete`, and destructive git pause on an orange card. Tap **Allow once** to run. Typing yes does not approve. Choices go through `ask_user_question` (blue card): tap an option, submit the form, or type a reply. First answer wins. Subscribe to `card.action.trigger` on the open platform.
+Unnamed `rm`, `find -delete`, and destructive git pause on an orange card. Tap **Allow once** to run. Typing yes does not approve. Choices go through `ask_user_question` (blue card): options sit in a numbered two-per-row grid with a grey description menu, tap one, submit the one-row form, or type a reply. First answer wins. Subscribe to `card.action.trigger` on the open platform.
+
+### Restart reattaches itself
+
+After a restart you don't have to speak first: the plugin resumes every known session and posts a green card (session title + model). A restart wrapper can drop one LLM-written continue instruction into `$DSH_HOME/restart-continue.json`; the card shows it inline and delivers it into the session as a new message, so the agent picks up where it left off. Expires in 10 minutes, consumed on read.
 
 ## Five minutes
 

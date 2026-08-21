@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4 — 2026-08-21
+
+Restart orchestration: on boot the plugin resumes known sessions and posts a green card (session title + model) — no need to speak first. A restart wrapper can pass one LLM-written continue instruction via `$DSH_HOME/restart-continue.json`; the card shows it inline and it is delivered into the session as a new message. Ask/approval cards redesigned: numbered two-per-row option grid with grey description menu, one-row input, action buttons at the bottom. Handbook §模型: how to add a provider (two files, protocol table, per-field); example overlay is a generic skeleton.
+
 ## 0.1.3 — 2026-08-19
 
 Resume is a Feishu card: tap a session or stay. `/rename` is also a model tool (`SlashCommand`). Tool results wait until 100K then keep 3 full views before official head/tail.
