@@ -133,14 +133,14 @@ export function noticeOfGoalLine(line) {
   return 'create'
 }
 
-export function buildGoalCard(id, goal, notice) {
+export function buildGoalCard(id, goal, notice, { noForm = false } = {}) {
   return goalCard({
     id,
     title: goalCardTitle(goal, notice),
     template: goalCardTemplate(goal),
-    body: goalCardBody(goal, notice),
+    body: goalCardBody(goal, notice, noForm),
     actions: goalActions(goal),
-    form: goalForm(goal),
+    form: noForm ? null : goalForm(goal),
   })
 }
 
@@ -161,7 +161,7 @@ function goalCardTemplate(goal) {
   return 'blue'
 }
 
-function goalCardBody(goal, notice) {
+function goalCardBody(goal, notice, noForm = false) {
   const lead = noticeLine(notice)
   if (!goal) return [lead, EMPTY_GOAL_HELP].filter(Boolean).join('\n\n')
   const phase = PHASE_ZH[goal.phase] || goal.phase
@@ -177,7 +177,7 @@ function goalCardBody(goal, notice) {
   lines.push(`阶段：${phase} · 轮次 ${goal.roundsStarted}/${goal.maxGoalRounds}`)
   lines.push(`激活：${armed}`)
   lines.push('')
-  lines.push(cardHint(goal))
+  lines.push(noForm ? '要修改或新建目标，重新发送 /goal。' : cardHint(goal))
   return lines.join('\n')
 }
 
@@ -250,9 +250,9 @@ export async function dismissGoal(views, lark, appId, chatId, body) {
   return rec
 }
 
-export async function presentGoal({ views, lark, appId, chatId, goal, notice, replace = true }) {
+export async function presentGoal({ views, lark, appId, chatId, goal, notice, replace = true, noForm = false }) {
   const id = randomUUID()
-  const card = buildGoalCard(id, goal, notice)
+  const card = buildGoalCard(id, goal, notice, { noForm })
   const prev = views.current(appId, chatId)
 
   if (replace && prev?.messageId) {

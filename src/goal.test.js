@@ -72,6 +72,16 @@ test('buildGoalCard colors and buttons', () => {
   assert.equal(empty.body.elements.find((el) => el.tag === 'form').elements[1].behaviors[0].value.op, 'create')
 })
 
+test('buildGoalCard noForm collapses input', () => {
+  const collapsed = buildGoalCard('tok4', sample(), 'create', { noForm: true })
+  assert.equal(collapsed.body.elements.find((el) => el.tag === 'form'), undefined)
+  assert.ok(collapsed.body.elements[0].content.includes('重新发送 /goal'))
+  assert.ok(collapsed.body.elements[0].content.includes(sample().objective))
+
+  const normal = buildGoalCard('tok5', sample(), 'create')
+  assert.ok(normal.body.elements.find((el) => el.tag === 'form'))
+})
+
 test('goal views rotate token per chat', () => {
   const views = createGoalViews()
   views.put({ id: 'a', appId: 'app', chatId: 'c', messageId: 'm1' })

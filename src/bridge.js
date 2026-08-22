@@ -290,7 +290,8 @@ export function createBridge(ctx, options) {
       const commands = ctx.get('commands')
       if (!commands?.execute) return goalResult(false, 'Goal 命令服务不可用', null)
       try {
-        const exec = await commands.execute(handle.agent, trimmed, new AbortController().signal)
+        // dsh >= 0.1.1-rc.1 signature is execute(agent, line, images, signal); pass empty images
+        const exec = await commands.execute(handle.agent, trimmed, [], new AbortController().signal)
         if (!exec) return goalResult(true, formatGoalStatus(null), null)
         if (exec.result.kind === 'error') {
           return goalResult(false, formatGoalError(exec.result.text), readGoal(handle.agent))

@@ -235,6 +235,7 @@ async function onCardAction({ appId, lark, data, cards, bridge, views }) {
       chatId: rec.chatId,
       goal: result.goal,
       notice: op,
+      noForm: op === 'create' || op === 'edit',
     })
     return { toast: { type: 'info', content: goalToast(op) } }
   }
