@@ -61,6 +61,21 @@ export function createLark(creds = process.env) {
     return lastId
   }
 
+  // 终局回复：本轮最后一条 assistant 消息（无 tool-call）。青头 Done + 模型别名。
+  // 超长分段时只有末段挂 Done 头，前段维持普通蓝头。
+  async function sendFinal(chatId, text, alias) {
+    const body = String(text ?? '')
+    if (!chatId || !body.trim()) return ''
+    const chunks = splitText(body, TEXT_LIMIT)
+    let lastId = ''
+    for (let i = 0; i < chunks.length; i++) {
+      const isLast = i === chunks.length - 1
+      const card = isLast ? finalReplyCard(alias, chunks[i]) : markdownToFeishuCard('', chunks[i])
+      lastId = await sendCard(chatId, card)
+    }
+    return lastId
+  }
+
   function progressCard(text) {
     return {
       schema: '2.0',
@@ -277,7 +292,19 @@ export function createLark(creds = process.env) {
     return `文件已发送 (${fileName})`
   }
 
-  return { appId, sendText, sendCard, editCard, progressCard, react, downloadResource, sendFile, start }
+  return { appId, sendText, sendFinal, sendCard, editCard, progressCard, react, downloadResource, sendFile, start }
+}
+
+// 终局卡：green 头 + Done · 别名，正文走同一条 markdown 渲染管线
+function finalReplyCard(alias, markdown) {
+  const card = markdownToFeishuCard('', markdown)
+  return {
+    ...card,
+    header: {
+      title: { tag: 'plain_text', content: alias ? `Done · ${alias}` : 'Done' },
+      template: 'green',
+    },
+  }
 }
 
 function parseMarkdownTable(markdown) {

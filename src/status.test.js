@@ -73,8 +73,8 @@ test('measureContext percent and missing session', () => {
 
 test('formatStatus no session', () => {
   const text = formatStatus({
-    alias: 'grk',
-    model: 'grok-4.6',
+    alias: 'any',
+    model: 'some-pro-model',
     hasSession: false,
     context: null,
     host: {
@@ -84,7 +84,7 @@ test('formatStatus no session', () => {
       cpu: { n: 8, l1: 1.23, l5: 0.8, l15: 0.5, pct: 15 },
     },
   })
-  assert.match(text, /模型  grk = grok-4\.6/)
+  assert.match(text, /模型  any = some-pro-model/)
   assert.match(text, /上下文  无会话/)
   assert.doesNotMatch(text, /主机/)
   assert.match(text, /内存  16G \/ 32G  已用 50%/)
@@ -94,8 +94,8 @@ test('formatStatus no session', () => {
 
 test('formatStatus with context', () => {
   const text = formatStatus({
-    alias: 'stf',
-    model: 'step-3.7-flash',
+    alias: 'lit',
+    model: 'some-flash-model',
     hasSession: true,
     context: { pct: 12, total: 30720, window: 256000 },
     agentStatus: 'idle',

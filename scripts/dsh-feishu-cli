@@ -5,20 +5,49 @@ const SOCK = process.env.DSH_FEISHU_CLI_SOCK || '/tmp/dsh-feishu-cli.sock'
 
 const args = process.argv.slice(2)
 if (args.length === 0 || args[0] === '-h' || args[0] === '--help') {
-  process.stderr.write(`dsh-feishu-cli send [-c chat] [--no-wait] <text>
+  process.stderr.write(`dsh-feishu-cli send [-c chat] [-b bot] [-m model] [--no-wait] <text>
 dsh-feishu-cli drain [-c chat]
 dsh-feishu-cli ping
+
+-b bot: deliver into a real bot's Feishu chat (appId, or an alias defined in
+        DSH_FEISHU_CLI_BOTS as JSON, e.g. '{"work":"cli_xxx"}').
+        The reply is sent from that bot into that chat. Without -b the message
+        goes to the local fake channel and replies print to stdout.
+-m model: one-shot model override by alias from your models file; affects only
+        this turn and does not change the session's saved model.
 `)
   process.exit(args.length === 0 ? 2 : 0)
+}
+
+function resolveBot(raw) {
+  const value = String(raw || '').trim()
+  if (!value) return ''
+  if (!value.startsWith('cli_')) {
+    try {
+      const map = JSON.parse(process.env.DSH_FEISHU_CLI_BOTS || '{}')
+      if (map[value]) return String(map[value])
+    } catch { /* fall through */ }
+  }
+  return value
 }
 
 const cmd = args[0]
 let chatId = 'local'
 let wait = true
+let bot = ''
+let model = ''
 const rest = []
 for (let i = 1; i < args.length; i++) {
   if (args[i] === '-c' || args[i] === '--chat') {
     chatId = args[++i] || 'local'
+    continue
+  }
+  if (args[i] === '-b' || args[i] === '--bot') {
+    bot = args[++i] || ''
+    continue
+  }
+  if (args[i] === '-m' || args[i] === '--model') {
+    model = (args[++i] || '').trim()
     continue
   }
   if (args[i] === '--no-wait') {
@@ -29,6 +58,9 @@ for (let i = 1; i < args.length; i++) {
 }
 
 const req = { id: String(Date.now()), cmd, chatId, wait }
+const appId = resolveBot(bot)
+if (appId) req.appId = appId
+if (model) req.model = model.toLowerCase()
 if (cmd === 'send') req.text = rest.join(' ')
 
 const sock = createConnection(SOCK)

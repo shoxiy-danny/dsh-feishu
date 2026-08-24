@@ -238,14 +238,27 @@ export function createBridge(ctx, options) {
     })
   }
 
-  async function deliver(appId, chatId, text, packs) {
+  async function deliver(appId, chatId, text, packs, modelAlias) {
     const handle = await ensure(appId, chatId)
     const agent = handle.agent
     if (packs?.omnicore) enableMcp(agent, 'omnicore')
     if (packs?.browser) enableMcp(agent, 'browser')
+    // 单次模型覆盖：只影响这一轮回复，跑完恢复会话原选型，不写持久化
+    let overridePrev
+    if (modelAlias && MODELS[modelAlias] && handle._modelRef) {
+      overridePrev = handle._modelRef.current
+      handle._modelRef.current = { provider: MODELS[modelAlias].provider, model: MODELS[modelAlias].model }
+    }
     const msg = userMessage(text)
     if (agent.status === 'running') agent.steer(msg)
     else agent.followup(msg)
+    if (overridePrev !== undefined) {
+      await Promise.race([
+        Promise.resolve(agent.whenIdle?.()).catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, 300_000)),
+      ])
+      if (handle._modelRef) handle._modelRef.current = overridePrev
+    }
   }
 
   function stop(appId, chatId) {

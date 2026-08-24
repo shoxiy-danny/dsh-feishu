@@ -133,7 +133,17 @@ export function noticeOfGoalLine(line) {
   return 'create'
 }
 
-export function buildGoalCard(id, goal, notice, { noForm = false } = {}) {
+export function buildGoalCard(id, goal, notice, { noForm = false, compact = false } = {}) {
+  if (compact) {
+    return goalCard({
+      id,
+      title: compactTitle(goal, notice),
+      template: goalCardTemplate(goal),
+      body: compactBody(goal, notice),
+      actions: [],
+      form: null,
+    })
+  }
   return goalCard({
     id,
     title: goalCardTitle(goal, notice),
@@ -142,6 +152,23 @@ export function buildGoalCard(id, goal, notice, { noForm = false } = {}) {
     actions: goalActions(goal),
     form: noForm ? null : goalForm(goal),
   })
+}
+
+function compactTitle(goal, notice) {
+  if (notice === 'create') return '目标已设定'
+  if (notice === 'edit') return '目标已保存'
+  if (notice === 'complete') return '目标已完成'
+  if (!goal) return notice === 'clear' ? '目标已清除' : '当前没有目标'
+  if (goal.phase === 'blocked') return '目标已阻塞'
+  if (goal.phase === 'paused') return '目标已暂停'
+  return '目标进行中'
+}
+
+function compactBody(goal, notice) {
+  const lead = noticeLine(notice)
+  if (!goal) return [lead, EMPTY_GOAL_HELP].filter(Boolean).join('\n\n')
+  const rounds = `${goal.roundsStarted}/${goal.maxGoalRounds}`
+  return [`**目标** ${goal.objective}`, `轮次 ${rounds}`].join('\n')
 }
 
 function goalCardTitle(goal, notice) {
@@ -250,9 +277,9 @@ export async function dismissGoal(views, lark, appId, chatId, body) {
   return rec
 }
 
-export async function presentGoal({ views, lark, appId, chatId, goal, notice, replace = true, noForm = false }) {
+export async function presentGoal({ views, lark, appId, chatId, goal, notice, replace = true, noForm = false, compact = false }) {
   const id = randomUUID()
-  const card = buildGoalCard(id, goal, notice, { noForm })
+  const card = buildGoalCard(id, goal, notice, { noForm, compact })
   const prev = views.current(appId, chatId)
 
   if (replace && prev?.messageId) {
@@ -317,6 +344,7 @@ export function attachGoal(ctx, { routeOf, views }) {
         chatId: route.chatId,
         goal,
         notice: op === 'block' ? 'block' : 'complete',
+        compact: op === 'complete',
       }).catch((err) => {
         process.stderr.write(`[dsh-feishu] goal notify failed: ${err}\n`)
       })

@@ -173,15 +173,15 @@ function collectButtons(elements, out = []) {
 test('modelCard groups pro first, two per row, marks current, has stay', () => {
   const card = modelCard({
     id: 'model-tok',
-    current: 'stf',
+    current: 'dsp',
     groups: [
       {
         key: 'pro', title: 'Pro · 重量级', hint: '硬活',
-        items: [{ alias: 'dsp', label: 'dsp = deepseek-v4-pro', short: 'deepseek-v4-pro' }, { alias: 'oxa', label: 'oxa = ox-alpha (OpenRouter)', short: 'ox-alpha' }],
+        items: [{ alias: 'dsp', label: 'dsp = deepseek-v4-pro', short: 'deepseek-v4-pro' }, { alias: 'any', label: 'any = some-pro-model', short: 'some-pro-model' }],
       },
       {
         key: 'flash', title: 'Flash · 轻量级', hint: '快省',
-        items: [{ alias: 'dsf', label: 'dsf = deepseek-v4-flash', short: 'deepseek-v4-flash' }, { alias: 'stf', label: 'stf = step-3.7-flash', short: 'step-3.7-flash' }],
+        items: [{ alias: 'dsf', label: 'dsf = deepseek-v4-flash', short: 'deepseek-v4-flash' }, { alias: 'lit', label: 'lit = some-flash-model', short: 'some-flash-model' }],
       },
     ],
   })
@@ -204,11 +204,11 @@ test('modelCard groups pro first, two per row, marks current, has stay', () => {
 
   const buttons = collectButtons(card.body.elements)
   assert.equal(buttons.length, 5)
-  assert.equal(buttons[0].text.content, 'dsp · deepseek-v4-pro')
-  const cur = buttons.find((b) => b.text.content.includes('stf'))
+  assert.equal(buttons[0].text.content, '* dsp · deepseek-v4-pro')
+  const cur = buttons.find((b) => b.text.content.includes('dsp'))
   assert.equal(cur.type, 'primary')
-  assert.equal(cur.text.content, '* stf · step-3.7-flash')
-  assert.deepEqual(cur.behaviors[0].value, { kind: 'model', token: 'model-tok', alias: 'stf' })
+  assert.equal(cur.text.content, '* dsp · deepseek-v4-pro')
+  assert.deepEqual(cur.behaviors[0].value, { kind: 'model', token: 'model-tok', alias: 'dsp' })
   const plain = buttons.find((b) => b.text.content.includes('dsf'))
   assert.equal(plain.type, 'default')
   const stay = card.body.elements.find((el) => el.tag === 'button' && el.behaviors?.[0]?.value?.op === 'stay')

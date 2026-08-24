@@ -56,6 +56,10 @@ Agent 自己多轮推进。连续卡住会标 blocked。进程重启后 **不会
 
 从左到右：模型别名、上下文占比、Goal 轮次、当前动作。Thinking 和工具名分开计数。跑完变 `Done.`，失败变 `Failed.`，正文另发，不跟进度糊在一起。
 
+## 终局 Done 卡
+
+每轮的最后一条总结回复单独识别：assistant 消息里没有 `tool-call` 块就是本轮末条（与 agent-loop 判定回合结束的规则一致），发绿头 `Done · 别名` 卡；中间过程发言仍是普通蓝头。重启播报和切换回执是青头，绿色只留给「一个完整的回答」。
+
 ## 模型
 
 默认只有 DeepSeek 官方两条：
@@ -217,7 +221,7 @@ DSH_FEISHU_DROP_TOOLS=mcp__browse__get_html
 
 ## 重启续跑
 
-进程重启后插件主动 resume 所有已知会话（不再等第一条消息），并向每个会话发绿头播报卡：会话名 + 模型名。
+进程重启后插件主动 resume 所有已知会话（不再等第一条消息），并向每个会话发青头播报卡：会话名 + 模型名。
 
 重启包装脚本可以在重启前往 `$DSH_HOME/restart-continue.json` 写一条「续跑指令」：
 
@@ -229,7 +233,7 @@ DSH_FEISHU_DROP_TOOLS=mcp__browse__get_html
 - `chatKey` — 目标会话 `appId::chatId`；省略时若只有一个活跃飞书会话则投给它
 - `ts` — 写入时间戳（毫秒）；超过 10 分钟视为过期不投
 
-启动流程读到该文件后：目标会话的绿卡内直接展示指令全文，并把 `text` 作为新消息投进该会话。文件读后立即覆写为 `{"consumed":true}`，防崩溃重投。
+启动流程读到该文件后：目标会话的青卡内直接展示指令全文，并把 `text` 作为新消息投进该会话。文件读后立即覆写为 `{"consumed":true}`，防崩溃重投。
 
 ## 本地假 bot
 
@@ -242,6 +246,21 @@ DSH_FEISHU_DROP_TOOLS=mcp__browse__get_html
 ```
 
 套接字默认 `/tmp/dsh-feishu-cli.sock`。
+
+### 定向投递到真实会话
+
+`-b` 指定真实 bot（appId，或在 `DSH_FEISHU_CLI_BOTS` 里定义的别名），消息经 bridge 投进该 bot 的飞书会话，回复也从该 bot 发出；适合 crontab 定时任务：
+
+```json
+{ "work": "cli_xxxxxxxxxxxxxxxx" }
+```
+
+```
+DSH_FEISHU_CLI_BOTS='{"work":"cli_..."}' ./scripts/dsh-feishu-cli send -b work -c oc_xxx --no-wait "提醒：……"
+./scripts/dsh-feishu-cli send -b work -c oc_xxx -m dsp "用 pro 模型跑这一轮"
+```
+
+`-m` 单次覆盖模型（别名来自模型文件），只影响这一轮，不改会话保存的选型。消息进入的是该会话的现有历史，之后可以继续追问。
 
 ## 运行时文件
 

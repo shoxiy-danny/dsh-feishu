@@ -30,7 +30,7 @@ export async function presentResume({ store, lark, appId, chatId, items }) {
         const switched = result.reason === 'switched'
         void lockResume({ messageId, lark }, {
           title: replaced ? '已更新' : switched ? '已切换' : '已取消',
-          template: switched ? 'green' : 'grey',
+          template: switched ? 'turquoise' : 'grey',
           body: replaced ? '请查看下方新卡片。' : switched ? '已用斜杠切到别的会话。' : '未切换会话。',
         })
       }

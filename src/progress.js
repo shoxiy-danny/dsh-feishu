@@ -137,16 +137,31 @@ export function attachProgress(ctx, { routeOf, modelOf, windowOf, goalOf }) {
     }
 
     if (event.type === 'assistant/message') {
-      const text = (event.data.message.content ?? [])
+      // 过滤空文本块：有的模型在 tool_use 前会吐只有空白/换行的 text。
+      const blocks = event.data.message.content ?? []
+      // 判据与 agent-loop 一致：无 tool-call 即本轮终局（toolCalls.length === 0 -> completed），
+      // 末条发绿头 Done 卡，中间过程发言维持普通蓝头。
+      const hasToolCall = blocks.some((block) => block.type === 'tool-call')
+      const text = blocks
         .filter((block) => block.type === 'text' && String(block.text || '').trim() !== '')
         .map((block) => block.text)
         .join('')
         .trim()
       if (text) {
         finish(route, 'done')
-        void route.lark.sendText(route.chatId, text).catch((err) => {
-          process.stderr.write(`[dsh-feishu] reply failed: ${err}\n`)
-        })
+        if (hasToolCall) {
+          void route.lark.sendText(route.chatId, text).catch((err) => {
+            process.stderr.write(`[dsh-feishu] reply failed: ${err}\n`)
+          })
+        } else {
+          const sel = modelOf?.(route.chatKey)
+          const alias = sel
+            ? (aliases[`${sel.provider}:${sel.model}`] || String(sel.model || '?').slice(0, 12))
+            : '?'
+          void route.lark.sendFinal(route.chatId, text, alias).catch((err) => {
+            process.stderr.write(`[dsh-feishu] final reply failed: ${err}\n`)
+          })
+        }
       }
     }
 

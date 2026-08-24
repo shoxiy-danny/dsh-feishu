@@ -82,6 +82,24 @@ test('buildGoalCard noForm collapses input', () => {
   assert.ok(normal.body.elements.find((el) => el.tag === 'form'))
 })
 
+test('buildGoalCard compact collapses to a settled result card', () => {
+  const created = buildGoalCard('tok6', sample(), 'create', { compact: true })
+  assert.equal(created.header.title.content, '目标已设定')
+  assert.equal(created.body.elements.length, 1)
+  assert.ok(created.body.elements[0].content.includes('写 README'))
+  assert.ok(created.body.elements[0].content.includes('1/3'))
+  assert.equal(created.body.elements.find((el) => el.tag === 'form'), undefined)
+  assert.equal(created.body.elements.filter((el) => el.tag === 'button').length, 0)
+
+  const edited = buildGoalCard('tok7', sample(), 'edit', { compact: true })
+  assert.equal(edited.header.title.content, '目标已保存')
+
+  const completed = buildGoalCard('tok8', sample({ phase: 'complete' }), 'complete', { compact: true })
+  assert.equal(completed.header.template, 'green')
+  assert.equal(completed.header.title.content, '目标已完成')
+  assert.equal(completed.body.elements.find((el) => el.tag === 'form'), undefined)
+})
+
 test('goal views rotate token per chat', () => {
   const views = createGoalViews()
   views.put({ id: 'a', appId: 'app', chatId: 'c', messageId: 'm1' })

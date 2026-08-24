@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.6 — 2026-08-24
+
+Final replies get their own card: when an assistant message carries no `tool-call` block it is the last message of the turn (same rule the agent loop uses to conclude a turn), so it is sent as a green "Done · alias" card instead of the plain blue one. Intermediate narration is unchanged. Restart announce and switch receipts move to turquoise so green now means "a finished answer".
+
+Scheduled sends can target real chats: `dsh-feishu-cli send -b <appId> -c <chatId> [-m <model>]` delivers through the bridge, and the reply goes out from that bot into that Feishu chat. `-m` overrides the model for that single turn without touching the session's saved choice. Bot aliases resolve via the `DSH_FEISHU_CLI_BOTS` JSON env.
+
+Goal create/edit confirmations collapse to a compact status card (objective + rounds) instead of re-rendering the full form.
+
 ## 0.1.5 — 2026-08-22
 
 Goal card collapses after a successful form submit: the card refreshes to status-only (objective, phase, rounds, action buttons) with a "resend /goal" hint instead of re-rendering an edit input. Fixed `/goal pause|resume|clear` against dsh ≥ 0.1.1-rc.1, where `commands.execute` gained an `images` parameter and the old three-argument call threw `Cannot read properties of undefined (reading 'aborted')`.

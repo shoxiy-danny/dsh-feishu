@@ -84,7 +84,7 @@ async function announceRestart({ bots, bridge }) {
       if (cont && item.appId === cont.appId && item.chatId === cont.chatId) {
         body += `\n---\n**续跑指令**\n${cont.text}`
       }
-      await lark.sendCard(item.chatId, lockedCard({ title: '已重启', template: 'green', body }))
+      await lark.sendCard(item.chatId, lockedCard({ title: '已重启', template: 'turquoise', body }))
     }
     process.stderr.write(`[dsh-feishu] restart announce sent chats=${warmed.length}\n`)
     if (cont) {
@@ -189,6 +189,7 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
   started.push(attachCliServer({
     socketPath: sockPath,
     lark: cliLark,
+    bridge,
     onInbound: (msg) => {
       process.stderr.write(
         `[dsh-feishu] inbound ${CLI_APP_ID} ${msg.messageType} ${msg.messageId} chat=${msg.chatId}\n`,
@@ -235,7 +236,7 @@ async function onCardAction({ appId, lark, data, cards, bridge, views }) {
       chatId: rec.chatId,
       goal: result.goal,
       notice: op,
-      noForm: op === 'create' || op === 'edit',
+      compact: op === 'create' || op === 'edit',
     })
     return { toast: { type: 'info', content: goalToast(op) } }
   }
@@ -437,13 +438,15 @@ async function onInbound({ appId, lark, msg, bridge, inboxRoot, cards, goalViews
       await lark.sendText(msg.chatId, result.text)
       return
     }
+    const notice = noticeOfGoalLine(text)
     await presentGoal({
       views: goalViews,
       lark,
       appId,
       chatId: msg.chatId,
       goal: result.goal,
-      notice: noticeOfGoalLine(text),
+      notice,
+      compact: notice === 'create' || notice === 'edit',
     })
     return
   }

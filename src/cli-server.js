@@ -5,7 +5,7 @@ import { CLI_APP_ID, makeInbound } from './cli-lark.js'
 const DEFAULT_SOCK = '/tmp/dsh-feishu-cli.sock'
 const DEFAULT_CHAT = 'local'
 
-export function attachCliServer({ socketPath = DEFAULT_SOCK, lark, onInbound, waitIdle }) {
+export function attachCliServer({ socketPath = DEFAULT_SOCK, lark, bridge, onInbound, waitIdle }) {
   let server
   try { unlinkSync(socketPath) } catch { /* ok */ }
 
@@ -57,6 +57,19 @@ export function attachCliServer({ socketPath = DEFAULT_SOCK, lark, onInbound, wa
       }
 
       const text = String(req.text ?? '')
+      // 定向投递：req.appId 指定真实 bot 时走 bridge.deliver，回复从该 bot 发进对应飞书会话
+      if (req.appId && req.appId !== CLI_APP_ID) {
+        if (!bridge) {
+          reply(sock, { id, ok: false, error: 'bridge unavailable' })
+          return
+        }
+        await bridge.deliver(String(req.appId), chatId, text, undefined, req.model)
+        if (req.wait !== false && typeof waitIdle === 'function') {
+          try { await waitIdle(String(req.appId), chatId) } catch { /* no session yet */ }
+        }
+        reply(sock, { id, ok: true, inboundId: `deliver-${chatId}` })
+        return
+      }
       const inbound = makeInbound({ chatId, text, resources: req.resources })
       await onInbound(inbound)
       if (req.wait !== false && typeof waitIdle === 'function') {

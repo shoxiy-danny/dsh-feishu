@@ -38,6 +38,10 @@ export function createCliLark({ emit } = {}) {
     return id
   }
 
+  async function sendFinal(chatId, text, _alias) {
+    return sendText(chatId, text)
+  }
+
   function progressCard(text) {
     return { text: String(text ?? '') }
   }
@@ -107,6 +111,7 @@ export function createCliLark({ emit } = {}) {
   return {
     appId: CLI_APP_ID,
     sendText,
+    sendFinal,
     sendCard,
     editCard,
     progressCard,
