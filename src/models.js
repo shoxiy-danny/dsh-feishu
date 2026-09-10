@@ -3,8 +3,8 @@ import { existsSync, readFileSync } from 'node:fs'
 const BUILTIN = {
   dsf: {
     provider: 'deepseek-official',
-    model: 'deepseek-v4-flash',
-    label: 'dsf = deepseek-v4-flash',
+    model: 'deepseek-flash',
+    label: 'dsf = deepseek-flash',
     window: 1_000_000,
   },
   dsp: {

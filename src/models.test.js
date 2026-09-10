@@ -15,7 +15,7 @@ test('builtin models when no file', () => {
   assert.equal(windowOf(models, models.dsf), 1_000_000)
   assert.deepEqual(selectionFromAlias(models, 'dsf'), {
     provider: 'deepseek-official',
-    model: 'deepseek-v4-flash',
+    model: 'deepseek-flash',
   })
   if (prev === undefined) delete process.env.DSH_FEISHU_MODELS
   else process.env.DSH_FEISHU_MODELS = prev

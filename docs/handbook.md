@@ -64,7 +64,7 @@ Agent 自己多轮推进。连续卡住会标 blocked。进程重启后 **不会
 
 默认只有 DeepSeek 官方两条：
 
-- `dsf` = deepseek-v4-flash
+- `dsf` = deepseek-flash
 - `dsp` = deepseek-v4-pro
 
 协议和供应商不在本插件里写死。飞书侧只认一份别名表；真正怎么打 API，交给 dsh 的 `llm-pi-ai`。手写路由能讲的线协议就三个：`openai-completions`、`openai-responses`、`anthropic-messages`。Bedrock / Vertex / Azure / Codex OAuth 不是一把 key，手写路由配不了。

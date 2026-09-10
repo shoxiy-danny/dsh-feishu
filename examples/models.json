@@ -1,8 +1,8 @@
 {
   "dsf": {
     "provider": "deepseek-official",
-    "model": "deepseek-v4-flash",
-    "label": "dsf = deepseek-v4-flash",
+    "model": "deepseek-flash",
+    "label": "dsf = deepseek-flash",
     "window": 1000000
   },
   "dsp": {

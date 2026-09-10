@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7 — 2026-09-10
+
+Default `dsf` alias now points at `deepseek-flash` (V4.1 Flash). Official V4 Flash is retired; the old id still routes there, but the catalog name is `deepseek-flash`. `dsp` stays `deepseek-v4-pro`. Overlay `examples/models.json` matches.
+
 ## 0.1.6 — 2026-08-24
 
 Final replies get their own card: when an assistant message carries no `tool-call` block it is the last message of the turn (same rule the agent loop uses to conclude a turn), so it is sent as a green "Done · alias" card instead of the plain blue one. Intermediate narration is unchanged. Restart announce and switch receipts move to turquoise so green now means "a finished answer".

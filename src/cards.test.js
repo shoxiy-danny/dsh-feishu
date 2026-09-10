@@ -181,7 +181,7 @@ test('modelCard groups pro first, two per row, marks current, has stay', () => {
       },
       {
         key: 'flash', title: 'Flash · 轻量级', hint: '快省',
-        items: [{ alias: 'dsf', label: 'dsf = deepseek-v4-flash', short: 'deepseek-v4-flash' }, { alias: 'lit', label: 'lit = some-flash-model', short: 'some-flash-model' }],
+        items: [{ alias: 'dsf', label: 'dsf = deepseek-flash', short: 'deepseek-flash' }, { alias: 'lit', label: 'lit = some-flash-model', short: 'some-flash-model' }],
       },
     ],
   })

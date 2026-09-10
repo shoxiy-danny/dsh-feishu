@@ -1,6 +1,6 @@
 {
   "name": "dsh-feishu",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "The harness lives in Feishu, as a headless daemon. Goal cards, resume cards, live progress, multi-bot. Not a remote for the webpage.",
   "type": "module",
   "main": "src/index.js",
