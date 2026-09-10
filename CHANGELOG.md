@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.8 — 2026-09-10
+
+Drop built-in `dsp`. Default alias is only `dsf` = `deepseek-flash`. README install is a numbered prerequisite list for a human or another agent. `examples/` now ships a copy-paste unofficial OpenAI-compatible model (`oa` = gpt-4.1): yaml route + models.json.
+
 ## 0.1.7 — 2026-09-10
 
 Default `dsf` alias now points at `deepseek-flash` (V4.1 Flash). Official V4 Flash is retired; the old id still routes there, but the catalog name is `deepseek-flash`. `dsp` stays `deepseek-v4-pro`. Overlay `examples/models.json` matches.

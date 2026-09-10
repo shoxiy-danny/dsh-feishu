@@ -5,10 +5,10 @@
     "label": "dsf = deepseek-flash",
     "window": 1000000
   },
-  "dsp": {
-    "provider": "deepseek-official",
-    "model": "deepseek-v4-pro",
-    "label": "dsp = deepseek-v4-pro",
-    "window": 1000000
+  "oa": {
+    "provider": "my-openai",
+    "model": "gpt-4.1",
+    "label": "oa = gpt-4.1",
+    "window": 1048576
   }
 }

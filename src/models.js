@@ -7,12 +7,6 @@ const BUILTIN = {
     label: 'dsf = deepseek-flash',
     window: 1_000_000,
   },
-  dsp: {
-    provider: 'deepseek-official',
-    model: 'deepseek-v4-pro',
-    label: 'dsp = deepseek-v4-pro',
-    window: 1_000_000,
-  },
 }
 
 function normalize(raw) {

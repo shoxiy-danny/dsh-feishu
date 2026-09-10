@@ -62,19 +62,20 @@ Agent 自己多轮推进。连续卡住会标 blocked。进程重启后 **不会
 
 ## 模型
 
-默认只有 DeepSeek 官方两条：
+默认只有 DeepSeek 官方一条：
 
-- `dsf` = deepseek-flash
-- `dsp` = deepseek-v4-pro
+- `dsf` = deepseek-flash（V4.1 Flash）
 
 协议和供应商不在本插件里写死。飞书侧只认一份别名表；真正怎么打 API，交给 dsh 的 `llm-pi-ai`。手写路由能讲的线协议就三个：`openai-completions`、`openai-responses`、`anthropic-messages`。Bedrock / Vertex / Azure / Codex OAuth 不是一把 key，手写路由配不了。
+
+非官方模型的完整可抄例子：`examples/profile.cordis.patch.yml` + `examples/models.json`（别名 `oa` = `gpt-4.1`，OpenAI Chat Completions）。把路由键、`baseURL`、`models[].id`、环境变量名换成你的厂商即可。
 
 ### 两份文件，两件事
 
 | 文件 | 谁读 | 干什么 |
 |------|------|--------|
 | profile 的 `cordis.patch.yml` 里 `llm-pi-ai.providers` | dsh | 这条路由怎么连：协议、地址、密钥环境变量、模型目录 |
-| `DSH_FEISHU_MODELS` 指向的 `models.json` | 本插件 | `/model` 列出什么、进度头显示什么。**整表替换**默认的 `dsf`/`dsp`，要留官方两条就自己抄回去 |
+| `DSH_FEISHU_MODELS` 指向的 `models.json` | 本插件 | `/model` 列出什么、进度头显示什么。**整表替换**默认的 `dsf`，要留官方那条就自己抄回去 |
 
 两处的 `provider` + `model` 必须对上：json 的 `provider` = yaml 路由键；json 的 `model` = 该路由 `models[].id`。
 
@@ -85,7 +86,7 @@ Agent 自己多轮推进。连续卡住会标 blocked。进程重启后 **不会
 ### 三步
 
 1. 把 `examples/profile.cordis.patch.yml` 里的 `llm-pi-ai` 段抄进 `~/.dsh/profiles/feishu/cordis.patch.yml`（或你的 `$DSH_HOME/profiles/feishu/`）
-2. 复制 `examples/models.json`。这份文件**整表替换**内置表，要留 `dsf`/`dsp` 就留着，再加自己的别名。路径必须是绝对路径。多一条时形状是：
+2. 复制 `examples/models.json`。这份文件**整表替换**内置表，要留 `dsf` 就留着，再加自己的别名。路径必须是绝对路径。多一条时形状是：
 
 ```json
 "mine": {
@@ -102,7 +103,7 @@ Agent 自己多轮推进。连续卡住会标 blocked。进程重启后 **不会
 
 ### `models.json` 字段
 
-顶层一个对象，键是别名（会转成小写）。缺 `provider` 或 `model` 的条目会被丢掉；文件无效则回退内置 `dsf`/`dsp`。
+顶层一个对象，键是别名（会转成小写）。缺 `provider` 或 `model` 的条目会被丢掉；文件无效则回退内置 `dsf`。
 
 | 字段 | 必填 | 含义 |
 |------|------|------|
@@ -257,7 +258,7 @@ DSH_FEISHU_DROP_TOOLS=mcp__browse__get_html
 
 ```
 DSH_FEISHU_CLI_BOTS='{"work":"cli_..."}' ./scripts/dsh-feishu-cli send -b work -c oc_xxx --no-wait "提醒：……"
-./scripts/dsh-feishu-cli send -b work -c oc_xxx -m dsp "用 pro 模型跑这一轮"
+./scripts/dsh-feishu-cli send -b work -c oc_xxx -m oa "用 overlay 里的 oa 跑这一轮"
 ```
 
 `-m` 单次覆盖模型（别名来自模型文件），只影响这一轮，不改会话保存的选型。消息进入的是该会话的现有历史，之后可以继续追问。

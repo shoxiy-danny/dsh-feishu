@@ -9,9 +9,9 @@ test('builtin models when no file', () => {
   const prev = process.env.DSH_FEISHU_MODELS
   delete process.env.DSH_FEISHU_MODELS
   const models = loadModels()
-  assert.deepEqual(Object.keys(models).sort(), ['dsf', 'dsp'])
+  assert.deepEqual(Object.keys(models).sort(), ['dsf'])
   assert.equal(models.dsf.provider, 'deepseek-official')
-  assert.equal(aliasOf(models, { provider: 'deepseek-official', model: 'deepseek-v4-pro' }), 'dsp')
+  assert.equal(aliasOf(models, { provider: 'deepseek-official', model: 'deepseek-flash' }), 'dsf')
   assert.equal(windowOf(models, models.dsf), 1_000_000)
   assert.deepEqual(selectionFromAlias(models, 'dsf'), {
     provider: 'deepseek-official',

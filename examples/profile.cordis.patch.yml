@@ -1,13 +1,28 @@
-# Copy these rows into ~/.dsh/profiles/feishu/cordis.patch.yml
-# after `dsh plugin --profile feishu add ...`.
+# Copy this file's rows into ~/.dsh/profiles/feishu/cordis.patch.yml
+# after `dsh plugin --profile feishu add github:shoxiy-danny/dsh-feishu`.
 # Later layers replace a whole config object, they do not deep-merge.
-# Field-by-field meaning: docs/handbook.md 模型.
-
-# Optional: extra providers beyond DeepSeek official.
+#
+# This example adds one unofficial OpenAI-compatible model (`oa` = gpt-4.1).
+# Change apiKeyEnv / baseURL / models[].id to match your vendor.
+# Pair with examples/models.json: json.provider = route key; json.model = models[].id.
 # Keys stay in the environment; never put secrets in this file.
 
-# Catalog route (key is a name dsh/pi-ai already ships): inherit protocol,
-# endpoint, and model list. Often only apiKeyEnv is required.
+- id: llm-pi-ai
+  config:
+    providers:
+      my-openai:
+        displayName: OpenAI-compatible
+        apiKeyEnv: MY_OPENAI_KEY
+        api: openai-completions
+        baseURL: https://api.openai.com/v1
+        models:
+          - id: gpt-4.1
+            name: gpt-4.1
+            contextWindow: 1048576
+            input: [text, image]
+
+# Catalog route instead of a hand-declared one (key is a name dsh/pi-ai already ships):
+# inherit protocol, endpoint, and model list. Often only apiKeyEnv is required.
 #
 # - id: llm-pi-ai
 #   config:
@@ -17,47 +32,7 @@
 #       anthropic:
 #         apiKeyEnv: ANTHROPIC_API_KEY
 
-# Hand-declared route (key is a name you invent): api + baseURL + models
-# are all required. One route, one protocol.
-#
-# - id: llm-pi-ai
-#   config:
-#     providers:
-#       my-gateway:
-#         displayName: My Gateway
-#         apiKeyEnv: MY_GATEWAY_KEY
-#         api: openai-completions          # or openai-responses / anthropic-messages
-#         baseURL: https://gateway.example/v1
-#         # reasoning: high
-#         # defaultContextWindow: 262144
-#         # defaultMaxTokens: 32768
-#         # defaultInput: [text]
-#         # headers:
-#         #   X-Custom: value
-#         # streamIdleTimeoutMs: 300000
-#         # compat:                         # openai-completions only
-#         #   thinkingFormat: openai         # openai / deepseek / openrouter / together / zai / qwen / string-thinking / ant-ling
-#         #   supportsReasoningEffort: false
-#         models:
-#           - id: the-model-id             # must match the vendor model name
-#             name: the-model-id
-#             contextWindow: 262144
-#             # maxTokens: 32768
-#             # input: [text]
-#             # reasoningEfforts:
-#             #   off:
-#             #   high: high
-
-# Then point DSH_FEISHU_MODELS at a copy of examples/models.json.
-# json.provider = the route key above; json.model = models[].id.
-
-# Optional MCP clients. Only add these if you actually run those servers.
-# - insert:
-#     - id: mcp-search
-#       name: '@deepseek-ai/dsh-mcp-client'
-#       config:
-#         serverName: search
-#         transport: streamable-http
-#         url: http://127.0.0.1:19002/mcp
-#         reconnect:
-#           enabled: true
+# Then:
+#   export DSH_FEISHU_MODELS=/absolute/path/to/examples/models.json
+#   export MY_OPENAI_KEY=...
+# Restart dsh --profile feishu. /model should list dsf and oa.

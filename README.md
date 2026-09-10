@@ -112,44 +112,69 @@ Agent 自己多轮推进。进程重启后 **不会** 偷偷接着烧，要在�
 不适合：个人 PC 上扫码 30 秒上手、还想留官方 Web 控制台、需要打字机流式答案卡、或只把飞书当通知渠道。那些货架上已经很多，去搜 `feishu` 即可。
 
 <a id="install"></a>
-## 五分钟跑起来
+## 安装（给 Agent / 人类逐步做）
 
-面向一台已经能出网的机器（Linux / macOS / WSL；Windows 原生机也能起进程，Agent 调 bash 会别扭）。需要 Node 22 和已安装的 `dsh`（`npm i -g @deepseek-ai/dsh`）。
+面向一台已经能出网的机器（Linux / macOS / WSL；Windows 原生机也能起进程，Agent 调 bash 会别扭）。按顺序做，缺一步后面会起不来。
 
-先在飞书开放平台建一个**企业自建应用**，事件订阅用长连接（WebSocket），不要 webhook。把 App ID / Secret 备好再部署。步骤见 [docs/feishu-setup.md](docs/feishu-setup.md)。
+### 0. 前置（先齐这四样）
 
-### 从 GitHub 装到独立 profile
+1. **Node 22+**。`node -v` 以 `v22` 开头。不够就先装 Node，不要用 18/20。
+2. **DeepSeek Harness CLI**。
+   ```sh
+   npm i -g @deepseek-ai/dsh
+   dsh --version
+   ```
+   应印出版本号。没有 `dsh` 命令就检查 `npm prefix -g` 是否在 `PATH`。
+3. **DeepSeek API key**。到 [platform.deepseek.com](https://platform.deepseek.com) 建一把，环境变量名 `DEEPSEEK_API_KEY`。默认模型只有官方 `dsf` = `deepseek-flash`。
+4. **飞书企业自建应用**（开放平台手建，无头机器不能扫码）。打开 [open.feishu.cn/app](https://open.feishu.cn/app)：
+   - 创建企业自建应用，记下 App ID / App Secret
+   - 权限：获取与发送单聊/群组消息、获取群组信息、以应用身份发消息、上传图片/文件、给消息加表情
+   - 事件订阅选 **长连接 / WebSocket**，不要 webhook
+   - 事件勾 `im.message.receive_v1`；回调勾 `card.action.trigger`（审核卡、提问卡；没订则按钮点了没反应）
+   - 打开「机器人」能力；要进群就把应用加进目标群
+
+逐步截图级说明：[docs/feishu-setup.md](docs/feishu-setup.md)。
+
+### 1. 装插件
 
 ```sh
 dsh plugin --profile feishu add github:shoxiy-danny/dsh-feishu
 ```
 
-建议钉扫描过的 commit，和市场页证据对齐：
+要钉某次提交（推荐给别人装）：
 
 ```sh
 dsh plugin --profile feishu add github:shoxiy-danny/dsh-feishu#<sha>
 ```
 
-然后把 App ID / Secret 和 `DEEPSEEK_API_KEY` 放进环境，再：
+### 2. 写环境变量后启动
 
 ```sh
+export FEISHU_APP_ID=cli_xxx
+export FEISHU_APP_SECRET=xxx
+export DEEPSEEK_API_KEY=sk-xxx
 dsh --profile feishu
 ```
+
+日志出现 `ready bots=...` 再在这个应用的**单聊**打一句。应先收到表情，再看到进度头，然后是正文。发 `/goal` 会出一张可点的目标卡。
+
+工作目录默认家目录；附件落 `workspace/inbox/`。第二个 bot 再填 `FEISHU_APP_ID_2` / `FEISHU_APP_SECRET_2`。
+
+### 3. 加非官方模型（可选）
+
+内置只有 `dsf`。要接 OpenAI 兼容网关或其它厂商：把 [examples/profile.cordis.patch.yml](examples/profile.cordis.patch.yml) 抄进 `~/.dsh/profiles/feishu/cordis.patch.yml`，把 [examples/models.json](examples/models.json) 拷到某处并 `export DSH_FEISHU_MODELS=/绝对路径/models.json`，再 export 样例里的 `MY_OPENAI_KEY`。样例别名是 `oa` = `gpt-4.1`。字段说明见 [docs/handbook.md](docs/handbook.md)「模型」。
 
 ### 从本仓脚本装（开发 / 自托管）
 
 ```sh
+git clone https://github.com/shoxiy-danny/dsh-feishu.git
+cd dsh-feishu
 cp .env.example .env
 # 填 FEISHU_APP_ID / FEISHU_APP_SECRET / DEEPSEEK_API_KEY
-
 chmod +x scripts/*.sh scripts/dsh-feishu-cli
 ./scripts/setup.sh
 ./scripts/start.sh
 ```
-
-启动后到这个应用的单聊打一句。应先收到表情，再看到进度头，然后是正文。发 `/goal` 会出一张可点的目标卡。
-
-工作目录默认家目录；附件落 `workspace/inbox/`。第二个 bot 再填 `FEISHU_APP_ID_2` / `FEISHU_APP_SECRET_2`。
 
 ## 文档
 
@@ -160,7 +185,7 @@ chmod +x scripts/*.sh scripts/dsh-feishu-cli
 | [docs/publish.md](docs/publish.md) | 作者：GitHub topic 和市场收录 |
 | [examples/](examples/) | 模型表、profile overlay 样例 |
 
-默认模型只有 DeepSeek 官方 `dsf` / `dsp`。加自己的供应商：手册「模型」一节按字段说明，不按厂商抄作业。样例骨架在 `examples/`。
+默认模型只有 DeepSeek 官方 `dsf`。加自己的供应商：抄 `examples/` 里的 yaml + json（样例别名 `oa`），字段说明在手册「模型」。
 
 需要 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)。发现页：[dsh-plugin.market](https://dsh-plugin.market/)。
 
@@ -233,42 +258,59 @@ Unnamed `rm`, `find -delete`, and destructive git pause on an orange card. Tap *
 
 After a restart you don't have to speak first: the plugin resumes every known session and posts a green card (session title + model). A restart wrapper can drop one LLM-written continue instruction into `$DSH_HOME/restart-continue.json`; the card shows it inline and delivers it into the session as a new message, so the agent picks up where it left off. Expires in 10 minutes, consumed on read.
 
-## Five minutes
+## Install (step by step, for an agent or a human)
 
-Aimed at a machine that can reach the internet (Linux / macOS / WSL; a raw Windows box will start, but the agent’s bash calls will fight you). Need Node 22 and `dsh` (`npm i -g @deepseek-ai/dsh`).
+Aimed at a machine that can reach the internet (Linux / macOS / WSL; a raw Windows box will start, but the agent’s bash calls will fight you). Do these in order.
 
-Create a Feishu **enterprise self-built app** first. Subscribe to events over **WebSocket**, not webhook. Have App ID / Secret ready before you deploy. Details: [docs/feishu-setup.md](docs/feishu-setup.md).
+### 0. Prerequisites
 
-### Install from GitHub
+1. **Node 22+**. `node -v` must start with `v22`.
+2. **DeepSeek Harness CLI**:
+   ```sh
+   npm i -g @deepseek-ai/dsh
+   dsh --version
+   ```
+3. **`DEEPSEEK_API_KEY`** from [platform.deepseek.com](https://platform.deepseek.com). The only built-in alias is `dsf` = `deepseek-flash`.
+4. **Feishu enterprise self-built app** (no QR on a headless box). At [open.feishu.cn/app](https://open.feishu.cn/app): create the app; copy App ID / Secret; grant messaging, group info, send-as-app, upload, and reactions; subscribe over **WebSocket**, not webhook; events `im.message.receive_v1` plus callback `card.action.trigger`; enable the bot capability. Details: [docs/feishu-setup.md](docs/feishu-setup.md).
+
+### 1. Add the plugin
 
 ```sh
 dsh plugin --profile feishu add github:shoxiy-danny/dsh-feishu
 ```
 
-Pin a scanned commit if you want the same evidence the market page shows:
+Pin a commit when you care about a known snapshot:
 
 ```sh
 dsh plugin --profile feishu add github:shoxiy-danny/dsh-feishu#<sha>
 ```
 
-Put `FEISHU_APP_ID` / `FEISHU_APP_SECRET` / `DEEPSEEK_API_KEY` in the environment, then:
+### 2. Export credentials and start
 
 ```sh
+export FEISHU_APP_ID=cli_xxx
+export FEISHU_APP_SECRET=xxx
+export DEEPSEEK_API_KEY=sk-xxx
 dsh --profile feishu
 ```
+
+Wait for `ready bots=...` in the log, then send one message in a p2p chat with that app. You should get a reaction, a progress header, then the reply.
+
+### 3. Extra models (optional)
+
+Copy [examples/profile.cordis.patch.yml](examples/profile.cordis.patch.yml) into `~/.dsh/profiles/feishu/cordis.patch.yml` and point `DSH_FEISHU_MODELS` at a copy of [examples/models.json](examples/models.json). The sample alias is `oa` = `gpt-4.1`. Handbook §模型 has the field table.
 
 ### Install from this repo (dev / self-host)
 
 ```sh
+git clone https://github.com/shoxiy-danny/dsh-feishu.git
+cd dsh-feishu
 cp .env.example .env
 # fill FEISHU_APP_ID / FEISHU_APP_SECRET / DEEPSEEK_API_KEY
-
 chmod +x scripts/*.sh scripts/dsh-feishu-cli
 ./scripts/setup.sh
 ./scripts/start.sh
 ```
-
-Then send one message in a p2p chat with that app. You should get a reaction, a progress header, then the reply. `/goal` opens a tappable Goal card.
 
 Default cwd is the home directory; attachments land in `workspace/inbox/`. A second bot is `FEISHU_APP_ID_2` / `FEISHU_APP_SECRET_2`.
 
@@ -287,7 +329,7 @@ Not for: 30-second QR setup on a personal PC; people who still want the official
 | [docs/publish.md](docs/publish.md) | Author: GitHub topics and market listing |
 | [examples/](examples/) | Model table and profile overlay samples |
 
-Ships DeepSeek official aliases only: `dsf` / `dsp`. Extra providers: handbook §模型 (per-field, not per-vendor). Skeleton in `examples/`.
+Ships one DeepSeek official alias: `dsf`. Extra providers: copy `examples/` (sample alias `oa`); handbook §模型 for the field table.
 
 Requires [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). Discovery: [dsh-plugin.market](https://dsh-plugin.market/).
 
