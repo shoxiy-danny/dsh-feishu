@@ -14,7 +14,7 @@
 | `/resume` | 发会话卡片：点一条切过去，或不选留在当前；`/resume 2` 仍可用 |
 | `/rename 名字` | 给当前会话起名 |
 | `/goal` | Goal，见下一节 |
-| `/bye` | 交给 Agent 做会话收尾（若你的提示词/skill 认这个词） |
+| `/bye` | 交给 Agent 做会话收尾。打包提示词会跑 `bye` skill（`examples/skills/bye/`） |
 
 不认识的 `/` 会回本期支持哪些，不会吞掉后转给模型。普通文字才会进 Agent。
 
@@ -186,11 +186,25 @@ yaml 的 `providers` 字典，**键就是路由名**。
 
 回图、回文件、回语音走工具 `send_file`。音频加 `voice=true` 会转 opus 再发成飞书语音（本机要有 ffmpeg）。
 
-## 记忆（可选）
+## 记忆 / 笔记 / 收尾（可选）
 
-设 `DSH_FEISHU_MEMORY_DIR` 指向一个含 `MEMORY.md` 的目录。稳定前缀只放指针，不灌全文。不设则完全不加载记忆段。
+三层，插件代码不用改：
 
-项目级 `CLAUDE.md` / `AGENTS.md` 默认关。打开：`DSH_FEISHU_PROJECT_CLAUDE_MD=1`。
+| 层 | 落在哪 | 怎么开 |
+|---|---|---|
+| 全局记忆 | `$DSH_FEISHU_MEMORY_DIR`/`MEMORY.md` 索引 + 分文件 | 设环境变量。空模板：`examples/memory/` |
+| 项目索引 | 项目根 `INDEX.md` | 提示词：点名项目先读它。模板：`examples/project/` |
+| 项目日志 | `<项目>/logs/项目名_YYYY-MM-DD.md` | checkpoint 一行；`/bye` 收拢成摘要 |
+
+设 `DSH_FEISHU_MEMORY_DIR` 指向一个含 `MEMORY.md` 的目录。稳定前缀只放指针，不灌全文。不设则完全不加载记忆段。拷贝空索引时不要覆盖已有文件。
+
+随手记是 `note` skill（`examples/skills/note/`）→ `~/notes.md`。「记住 / 忘掉」走全局记忆，不进笔记。本插件没有内置 cron，「提醒我」不要写进笔记假装会响。
+
+`/bye` 原样交给 Agent。把 `examples/skills/bye/` 拷到 dsh 会扫的 skills 目录（常见 `~/.dsh/skills/`）才会真正改文件。bye 对账 `~/notes.md` 的 `[待办]`。
+
+技能不会随插件自动安装，要拷一次。
+
+项目级 `CLAUDE.md` / `AGENTS.md` 默认关。打开：`DSH_FEISHU_PROJECT_CLAUDE_MD=1`。那是路径上溯的指令头，不是项目记忆。
 
 ## MCP 工具裁剪（可选）
 

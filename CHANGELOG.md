@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.9 — 2026-09-11
+
+Packaged prompts now describe three-layer memory (global index, project INDEX, daily logs), scratch notes (`~/notes.md`), and `/bye` handoff. Copy-paste templates and skills live under `examples/memory/`, `examples/project/`, `examples/skills/{bye,note}/`. Skills are not auto-installed. Plugin runtime unchanged: still a pointer via `DSH_FEISHU_MEMORY_DIR`.
+
 ## 0.1.8 — 2026-09-10
 
 Drop built-in `dsp`. Default alias is only `dsf` = `deepseek-flash`. README install is a numbered prerequisite list for a human or another agent. `examples/` now ships a copy-paste unofficial OpenAI-compatible model (`oa` = gpt-4.1): yaml route + models.json.

@@ -183,7 +183,7 @@ chmod +x scripts/*.sh scripts/dsh-feishu-cli
 | [docs/handbook.md](docs/handbook.md) | 斜杠命令、Goal 卡片、模型、多 bot、MCP、假 bot |
 | [docs/feishu-setup.md](docs/feishu-setup.md) | 飞书应用、权限、长连接 |
 | [docs/publish.md](docs/publish.md) | 作者：GitHub topic 和市场收录 |
-| [examples/](examples/) | 模型表、profile overlay 样例 |
+| [examples/](examples/) | 模型表、记忆/项目模板、bye 与 note skill |
 
 默认模型只有 DeepSeek 官方 `dsf`。加自己的供应商：抄 `examples/` 里的 yaml + json（样例别名 `oa`），字段说明在手册「模型」。
 
@@ -327,7 +327,7 @@ Not for: 30-second QR setup on a personal PC; people who still want the official
 | [docs/handbook.md](docs/handbook.md) | Commands, Goal card, models, multi-bot, MCP, fake CLI bot |
 | [docs/feishu-setup.md](docs/feishu-setup.md) | Feishu app, scopes, long connection |
 | [docs/publish.md](docs/publish.md) | Author: GitHub topics and market listing |
-| [examples/](examples/) | Model table and profile overlay samples |
+| [examples/](examples/) | Model table, memory/project templates, bye and note skills |
 
 Ships one DeepSeek official alias: `dsf`. Extra providers: copy `examples/` (sample alias `oa`); handbook §模型 for the field table.
 
