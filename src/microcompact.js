@@ -173,7 +173,7 @@ function applyPruneGate(session, tokens, state, pruneFn) {
         content: [{ ...block, content }],
       },
     }, {
-      surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq },
+      surfaceOp: { op: 'replace', start: seq, end: seq },
       sourceEventSeqs: [seq],
     })
     n += 1

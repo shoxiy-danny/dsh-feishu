@@ -20,7 +20,7 @@ Sync with the private build. Everything below is opt-in through env vars, so a d
 
 **Guard.** Killing the daemon itself (`pkill -f dsh-<name>`) is caught. `rm` targets containing unexpanded shell variables are no longer misread as home-dir paths, so `rm -f "$TMP_FILE"` stops raising a card. Optional restart-script rewrite: set `DSH_FEISHU_RESTART_SCRIPT` and a bash call to that script with no `appId::chatId` gets the current window appended.
 
-**Session API compatibility.** `microcompact` and `vision` read the surface through `eventAt` / `snapshotEvents` when present, and `surfaceOp` now uses `startSeq` / `endSeq` (dsh >= 0.1.7-rc.1). Image stripping for text-only models runs on resume and on model switch.
+**Session API compatibility.** `microcompact` and `vision` read the surface through `eventAt` / `snapshotEvents` when the session object exposes them, falling back to the plain `events` array otherwise. `surfaceOp` keeps the documented `{ op: 'replace', start, end }` shape. Image stripping for text-only models runs on resume and on model switch.
 
 **CLI socket.** `clear` command, and `send` accepts `-b <appId>` / `-m <model>` for targeted delivery. Socket default is unchanged (`/tmp/dsh-feishu-cli.sock`).
 

@@ -227,10 +227,12 @@ DSH_FEISHU_BOT_LABELS='cli_aaa=Alice,cli_bbb=Bob'
 这套默认名字对齐常见的 OmniCore / browser-mcp。你用别的 MCP，改环境变量：
 
 ```
-DSH_FEISHU_MCP_PACKS=vision:^mcp__vision__;browse:^mcp__browse__
-DSH_FEISHU_ALWAYS_TOOLS=mcp__browse__search
-DSH_FEISHU_DROP_TOOLS=mcp__browse__get_html
+DSH_FEISHU_MCP_PACKS='vision:^mcp__vision__;browse:^mcp__browse__'
+DSH_FEISHU_ALWAYS_TOOLS=mcp__browse__search,mcp__browse__fetch
 ```
+
+`DSH_FEISHU_ALWAYS_TOOLS` 用逗号分隔：列进去的工具不受 `enable_mcp` 管，一直可见。
+`DSH_FEISHU_MCP_PACKS` 用分号分组、冒号分隔组名和正则。组名会自动变成 `/prompt` 里的 `enable_mcp` 选项。
 
 没有这些 MCP 也能跑，只是 `enable_mcp` 打开后找不到对应工具。
 

@@ -159,6 +159,14 @@ Agent 自己多轮推进。进程重启后 **不会** 偷偷接着烧，要在�
 dsh plugin --profile feishu add github:shoxiy-danny/dsh-feishu
 ```
 
+想锁死版本、以后不被上游改动影响，就钉 commit（`git ls-remote` 取最新 sha）：
+
+```sh
+dsh plugin --profile feishu add github:shoxiy-danny/dsh-feishu#<sha>
+```
+
+以后怎么升级、怎么回滚，见 [docs/upgrade.md](docs/upgrade.md)。
+
 要钉某次提交（推荐给别人装）：
 
 ```sh
@@ -198,10 +206,15 @@ chmod +x scripts/*.sh scripts/dsh-feishu-cli
 
 | 文件 | 内容 |
 |------|------|
+| [docs/install.md](docs/install.md) | 从零装一遍：前置、飞书应用、启动、验收、常见失败 |
+| [docs/upgrade.md](docs/upgrade.md) | **已经在用的人看这个**：确认装法、升级、0.1.9 → 0.2.0 迁移、回滚 |
+| [docs/env.md](docs/env.md) | 全部环境变量一张表，标了默认值和「不设会怎样」 |
 | [docs/handbook.md](docs/handbook.md) | 斜杠命令、Goal 卡片、模型、多 bot、MCP、假 bot |
-| [docs/feishu-setup.md](docs/feishu-setup.md) | 飞书应用、权限、长连接 |
+| [docs/feishu-setup.md](docs/feishu-setup.md) | 飞书应用、权限、长连接（逐步截图级） |
 | [docs/publish.md](docs/publish.md) | 作者：GitHub topic 和市场收录 |
 | [examples/](examples/) | 模型表、记忆/项目模板、bye 与 note skill |
+
+已经在跑老版本？直接看 [docs/upgrade.md](docs/upgrade.md)。
 
 默认模型只有 DeepSeek 官方 `dsf`。加自己的供应商：抄 `examples/` 里的 yaml + json（样例别名 `oa`），字段说明在手册「模型」。
 
@@ -311,6 +324,14 @@ Aimed at a machine that can reach the internet (Linux / macOS / WSL; a raw Windo
 dsh plugin --profile feishu add github:shoxiy-danny/dsh-feishu
 ```
 
+To pin a version instead (so upstream changes never surprise you), use a commit:
+
+```sh
+dsh plugin --profile feishu add github:shoxiy-danny/dsh-feishu#<sha>
+```
+
+Upgrading and rolling back: [docs/upgrade.md](docs/upgrade.md).
+
 Pin a commit when you care about a known snapshot:
 
 ```sh
@@ -356,10 +377,15 @@ Not for: 30-second QR setup on a personal PC; people who still want the official
 
 | File | What |
 |------|------|
+| [docs/install.md](docs/install.md) | From zero: prerequisites, Feishu app, start, acceptance, failures |
+| [docs/upgrade.md](docs/upgrade.md) | **Already running it? Start here.** Detect install type, upgrade, 0.1.9 → 0.2.0, rollback |
+| [docs/env.md](docs/env.md) | Every environment variable, default, and what happens if unset |
 | [docs/handbook.md](docs/handbook.md) | Commands, Goal card, models, multi-bot, MCP, fake CLI bot |
 | [docs/feishu-setup.md](docs/feishu-setup.md) | Feishu app, scopes, long connection |
 | [docs/publish.md](docs/publish.md) | Author: GitHub topics and market listing |
 | [examples/](examples/) | Model table, memory/project templates, bye and note skills |
+
+On an older release? Go straight to [docs/upgrade.md](docs/upgrade.md).
 
 Ships one DeepSeek official alias: `dsf`. Extra providers: copy `examples/` (sample alias `oa`); handbook §模型 for the field table.
 

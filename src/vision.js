@@ -77,7 +77,7 @@ export function stripSessionImages(session) {
         ...event.data,
         content: stripImageBlocks(content),
       }, {
-        surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq },
+        surfaceOp: { op: 'replace', start: seq, end: seq },
         sourceEventSeqs: [seq],
       })
       n += 1
@@ -91,7 +91,7 @@ export function stripSessionImages(session) {
         ...event.data,
         message: { ...msg, content: stripImageBlocks(content) },
       }, {
-        surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq },
+        surfaceOp: { op: 'replace', start: seq, end: seq },
         sourceEventSeqs: [seq],
       })
       n += 1
@@ -155,7 +155,7 @@ export function stripMissingSessionImages(session, exists) {
         ...event.data,
         content: next,
       }, {
-        surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq },
+        surfaceOp: { op: 'replace', start: seq, end: seq },
         sourceEventSeqs: [seq],
       })
       n += 1
@@ -171,7 +171,7 @@ export function stripMissingSessionImages(session, exists) {
         ...event.data,
         message: { ...msg, content: next },
       }, {
-        surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq },
+        surfaceOp: { op: 'replace', start: seq, end: seq },
         sourceEventSeqs: [seq],
       })
       n += 1

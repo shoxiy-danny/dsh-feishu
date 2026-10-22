@@ -42,7 +42,7 @@ function makeSession() {
       if (type === 'tool/result') {
         const op = opts?.surfaceOp
         if (op?.op === 'replace') {
-          const i = nodes.indexOf(op.startSeq ?? op.start)
+          const i = nodes.indexOf(op.start)
           if (i >= 0) nodes[i] = event.seq
         } else {
           nodes.push(event.seq)

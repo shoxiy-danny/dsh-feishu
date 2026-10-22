@@ -39,7 +39,7 @@ function makeSession() {
       log.push(event)
       const op = opts?.surfaceOp
       if (op?.op === 'replace') {
-        const i = nodes.indexOf(op.startSeq ?? op.start)
+        const i = nodes.indexOf(op.start)
         if (i >= 0) nodes[i] = event.seq
       } else {
         nodes.push(event.seq)
@@ -132,11 +132,11 @@ test('stripSessionImages replaces user and tool surfaces, skips text-only', () =
 
   const n = stripSessionImages(session)
   assert.equal(n, 2)
-  const replacedUser = log.find((ev) => ev.surfaceOp?.op === 'replace' && (ev.surfaceOp.startSeq ?? ev.surfaceOp.start) === userSeq)
+  const replacedUser = log.find((ev) => ev.surfaceOp?.op === 'replace' && ev.surfaceOp.start === userSeq)
   assert.ok(replacedUser)
   assert.equal(contentHasImage(replacedUser.data.content), false)
   assert.match(replacedUser.data.content[0].text, /inbox\/a\.png/)
-  const replacedTool = log.find((ev) => ev.surfaceOp?.op === 'replace' && (ev.surfaceOp.startSeq ?? ev.surfaceOp.start) === toolSeq)
+  const replacedTool = log.find((ev) => ev.surfaceOp?.op === 'replace' && ev.surfaceOp.start === toolSeq)
   assert.ok(replacedTool)
   assert.equal(contentHasImage(replacedTool.data.message.content), false)
 })
@@ -193,7 +193,7 @@ test('stripMissingSessionImages only rewrites missing surfaces', () => {
   assert.equal(n, 1)
   assert.equal(contentHasImage(log[keepSeq].data.content), true)
   const replaced = log.find((ev) => ev.surfaceOp?.op === 'replace'
-    && (ev.surfaceOp.startSeq ?? ev.surfaceOp.start) === dropSeq)
+    && ev.surfaceOp.start === dropSeq)
   assert.ok(replaced)
   assert.equal(contentHasImage(replaced.data.content), false)
   assert.match(replaced.data.content[0].text, /gone\.png/)
