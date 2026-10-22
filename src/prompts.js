@@ -1,11 +1,12 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { memorySectionText, readMemoryIndex } from './memory.js'
 import { attachHeaders } from './headers.js'
 import { loadSettings } from './settings.js'
 
-const PACKAGED = join(dirname(fileURLToPath(import.meta.url)), '..', 'prompts')
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..')
+const PROMPTS = join(ROOT, 'prompts')
 
 const SECTIONS = [
   { file: '00-identity.md', name: 'feishu:identity', order: 1 },
@@ -13,14 +14,8 @@ const SECTIONS = [
   { file: '20-tools.md', name: 'feishu:tools', order: 20 },
 ]
 
-function promptsDir() {
-  const override = process.env.DSH_FEISHU_PROMPTS_DIR
-  if (override && existsSync(override)) return override
-  return PACKAGED
-}
-
-function readPrompt(dir, name) {
-  return readFileSync(join(dir, name), 'utf8').trim()
+function readPrompt(name) {
+  return readFileSync(join(PROMPTS, name), 'utf8').trim()
 }
 
 export function attachPrompts(ctx) {
@@ -30,33 +25,29 @@ export function attachPrompts(ctx) {
     return
   }
 
-  const dir = promptsDir()
   for (const spec of SECTIONS) {
-    const path = join(dir, spec.file)
-    if (!existsSync(path)) continue
     prompt.section({
       name: spec.name,
       order: spec.order,
-      text: readPrompt(dir, spec.file),
+      text: readPrompt(spec.file),
     })
   }
 
-  const memText = memorySectionText()
-  if (memText) {
-    prompt.section({
-      name: 'feishu:memory',
-      order: 40,
-      text: memText,
-    })
-    const mem = readMemoryIndex()
-    if (mem.ok) {
-      process.stderr.write(`[dsh-feishu] MEMORY pointer -> ${mem.root}\n`)
-    }
+  const mem = readMemoryIndex()
+  prompt.section({
+    name: 'feishu:memory',
+    order: 40,
+    text: memorySectionText(),
+  })
+  if (mem.ok) {
+    process.stderr.write(`[dsh-feishu] MEMORY pointer -> ${mem.root} (index ${mem.text.length} chars, not inlined)\n`)
+  } else {
+    process.stderr.write(`[dsh-feishu] MEMORY index MISSING root=${mem.root || 'none'}\n`)
   }
 
   attachHeaders(ctx, loadSettings())
 
   let version = '?'
-  try { version = readPrompt(dir, 'VERSION') } catch { /* optional */ }
-  process.stderr.write(`[dsh-feishu] prompts v${version} loaded from ${dir}\n`)
+  try { version = readPrompt('VERSION') } catch {}
+  process.stderr.write(`[dsh-feishu] prompts v${version} loaded from ${PROMPTS}\n`)
 }

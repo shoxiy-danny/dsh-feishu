@@ -1,12 +1,23 @@
 import { randomUUID } from 'node:crypto'
 import { lockedCard, resumeCard } from './cards.js'
 
-export async function presentResume({ store, lark, appId, chatId, items }) {
+export const RESUME_PAGE_SIZE = 8
+
+export function resumePaging(total, page) {
+  const count = Math.max(0, Number(total) || 0)
+  if (count === 0) return { page: 1, pages: 1, total: 0 }
+  const pages = Math.max(1, Math.ceil(count / RESUME_PAGE_SIZE))
+  const raw = Number.parseInt(page, 10)
+  const p = Number.isInteger(raw) ? Math.min(pages, Math.max(1, raw)) : 1
+  return { page: p, pages, total: count }
+}
+
+export async function presentResume({ store, lark, appId, chatId, items, page, pages, total }) {
   for (const rec of store.finds(appId, chatId, 'resume')) {
     store.settle(rec.id, { abort: true, reason: 'replaced' })
   }
   const id = randomUUID()
-  const card = resumeCard({ id, items })
+  const card = resumeCard({ id, items, page, pages, total })
   const messageId = await lark.sendCard(chatId, card)
   store.add({
     id,
@@ -55,4 +66,18 @@ export async function lockResume(rec, { title, template, body }) {
 export function resumePickFailed(reply) {
   const text = String(reply || '')
   return text.startsWith('切不过去') || text.startsWith('序号无效')
+}
+
+export async function resumePageCard(rec, bridge, page) {
+  const view = await bridge.listResumeItems(rec.appId, rec.chatId, page)
+  return {
+    view,
+    card: resumeCard({
+      id: rec.id,
+      items: view.items,
+      page: view.page,
+      pages: view.pages,
+      total: view.total,
+    }),
+  }
 }

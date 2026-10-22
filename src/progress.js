@@ -5,6 +5,10 @@ const DEBOUNCE_MS = 300
 
 export function attachProgress(ctx, { routeOf, modelOf, windowOf, goalOf }) {
   const aliases = aliasMap(loadModels())
+  const aliasOfSelection = (sel) => {
+    if (!sel) return '?'
+    return aliases[`${sel.provider}:${sel.model}`] || String(sel.model || '?').slice(0, 12)
+  }
   const buffers = new Map()
   const cards = new Map()
   const chatSession = new Map()
@@ -35,11 +39,7 @@ export function attachProgress(ctx, { routeOf, modelOf, windowOf, goalOf }) {
   }
 
   function prefix(chatKey) {
-    const sel = modelOf?.(chatKey)
-    let alias = '?'
-    if (sel) {
-      alias = aliases[`${sel.provider}:${sel.model}`] || String(sel.model || '?').slice(0, 12)
-    }
+    const alias = aliasOfSelection(modelOf?.(chatKey))
     const pct = percent(chatKey)
     const s = cards.get(chatKey)
     if (s && pct !== null) s.lastPct = pct
@@ -137,10 +137,10 @@ export function attachProgress(ctx, { routeOf, modelOf, windowOf, goalOf }) {
     }
 
     if (event.type === 'assistant/message') {
-      // 过滤空文本块：有的模型在 tool_use 前会吐只有空白/换行的 text。
+      // 过滤空文本块：xff 等模型在 tool_use 前会吐只有空白/换行的 text。
+      // 每次 LLM 出字立刻单独发飞书，不攒到 idle 再合并。
       const blocks = event.data.message.content ?? []
-      // 判据与 agent-loop 一致：无 tool-call 即本轮终局（toolCalls.length === 0 -> completed），
-      // 末条发绿头 Done 卡，中间过程发言维持普通蓝头。
+      // 判据与 agent-loop 一致：无 tool-call 即本轮终局（agent.ts: toolCalls.length === 0 -> completed）
       const hasToolCall = blocks.some((block) => block.type === 'tool-call')
       const text = blocks
         .filter((block) => block.type === 'text' && String(block.text || '').trim() !== '')
@@ -154,11 +154,7 @@ export function attachProgress(ctx, { routeOf, modelOf, windowOf, goalOf }) {
             process.stderr.write(`[dsh-feishu] reply failed: ${err}\n`)
           })
         } else {
-          const sel = modelOf?.(route.chatKey)
-          const alias = sel
-            ? (aliases[`${sel.provider}:${sel.model}`] || String(sel.model || '?').slice(0, 12))
-            : '?'
-          void route.lark.sendFinal(route.chatId, text, alias).catch((err) => {
+          void route.lark.sendFinal(route.chatId, text, aliasOfSelection(modelOf?.(route.chatKey))).catch((err) => {
             process.stderr.write(`[dsh-feishu] final reply failed: ${err}\n`)
           })
         }

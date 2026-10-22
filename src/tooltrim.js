@@ -1,9 +1,7 @@
-const DROP = new Set(
-  String(process.env.DSH_FEISHU_DROP_TOOLS || '')
-    .split(',')
-    .map((name) => name.trim())
-    .filter(Boolean),
-)
+// MCP 分组默认 omnicore / browser；想接别的 MCP 就设
+// DSH_FEISHU_MCP_PACKS='omnicore:^mcp__OmniCore__;browser:^mcp__browser-mcp__'。
+const PACKS = parsePacks(process.env.DSH_FEISHU_MCP_PACKS || 'omnicore:^mcp__OmniCore__;browser:^mcp__browser-mcp__')
+const PACK_IDS = PACKS.map((p) => p.id)
 
 const ALWAYS = new Set(
   String(process.env.DSH_FEISHU_ALWAYS_TOOLS || [
@@ -14,8 +12,6 @@ const ALWAYS = new Set(
     .map((name) => name.trim())
     .filter(Boolean),
 )
-
-const PACKS = parsePacks(process.env.DSH_FEISHU_MCP_PACKS || 'omnicore:^mcp__OmniCore__;browser:^mcp__browser-mcp__')
 
 const GLOB_SKIP = /(?:^|\/)(?:node_modules|\.git|\.pnpm)(?:\/|$)/
 
@@ -41,10 +37,10 @@ function parsePacks(raw) {
 }
 
 function packOf(agent) {
-  if (!agent) return Object.fromEntries(PACKS.map((p) => [p.id, false]))
+  if (!agent) return Object.fromEntries(PACK_IDS.map((id) => [id, false]))
   let pack = packs.get(agent)
   if (!pack) {
-    pack = Object.fromEntries(PACKS.map((p) => [p.id, false]))
+    pack = Object.fromEntries(PACK_IDS.map((id) => [id, false]))
     packs.set(agent, pack)
   }
   return pack
@@ -80,7 +76,7 @@ function filterGlobText(text) {
     kept.push(line)
   }
   if (skipped === 0) return null
-  const out = [...kept, `(filtered ${skipped} node_modules/.git/.pnpm paths)`]
+  const out = [...kept, `（已滤掉 ${skipped} 条 node_modules/.git/.pnpm）`]
   if (footer) out.push(footer)
   return out.join('\n')
 }
@@ -94,18 +90,17 @@ function visible(name, pack) {
 }
 
 function enableTool() {
-  const ids = PACKS.map((p) => p.id)
   return {
     name: 'enable_mcp',
     description:
-      'Open a group of MCP tools for this session. After opening, they stay available. Search/fetch tools listed as always-on do not need this.',
+      '为本会话打开一组 MCP 工具，打开后本会话不再收回。omnicore=图/语音/视频；browser=点选/截图/多步浏览。搜索和读网页不用开，直接用 mcp__browser-mcp__web_search / fetch_page。',
     parameters: {
       type: 'object',
       properties: {
         pack: {
           type: 'string',
-          enum: ids.length ? ids : ['none'],
-          description: 'Which MCP pack to open',
+          enum: PACK_IDS.length ? PACK_IDS : ['none'],
+          description: '要打开哪一组 MCP',
         },
       },
       required: ['pack'],
@@ -122,17 +117,17 @@ function enableTool() {
     },
     async execute(args, exec) {
       const which = String(args?.pack || '')
-      if (!ids.includes(which)) {
-        throw new Error(`pack must be one of: ${ids.join(', ') || '(none configured)'}`)
+      if (!PACK_IDS.includes(which)) {
+        throw new Error(`pack 只能是：${PACK_IDS.join(' / ') || '(未配置)'}`)
       }
       const pack = enableMcp(exec.agent, which)
       return {
-        result: `Opened ${which}. Later turns in this session can call those tools. Current: ${JSON.stringify(pack)}`,
+        result: `已打开 ${which}。本会话后续轮次能直接调这些工具，不用再 enable。当前：${PACK_IDS.map((id) => `${id}=${pack[id]}`).join(' ')}`,
       }
     },
     presentCall: (args) => ({
       card: 'generic',
-      title: 'Open MCP',
+      title: '打开 MCP',
       kind: 'other',
       rawInput: args?.pack,
     }),
@@ -151,7 +146,7 @@ export function enableMcp(agent, which) {
 
 export function attachToolTrim(ctx) {
   const tools = ctx.get('tools')
-  if (tools?.register && PACKS.length) {
+  if (tools?.register && PACK_IDS.length) {
     try {
       tools.register(enableTool())
       process.stderr.write('[dsh-feishu] enable_mcp registered\n')
@@ -171,11 +166,11 @@ export function attachToolTrim(ctx) {
 
   ctx.on('tools/pre-execute', async (exec, next) => {
     if (DROP.has(exec.name)) {
-      return { kind: 'deny', reason: `${exec.name} is disabled on the Feishu surface` }
+      return { kind: 'deny', reason: `${exec.name} 已从飞书面摘掉` }
     }
     const spec = packOfName(exec.name)
     if (spec && !ALWAYS.has(exec.name) && !packOf(exec.agent)[spec.id]) {
-      return { kind: 'deny', reason: `Call enable_mcp pack=${spec.id} first` }
+      return { kind: 'deny', reason: `先 enable_mcp pack=${spec.id}，再调 ${exec.name}` }
     }
     return next()
   })
@@ -189,5 +184,5 @@ export function attachToolTrim(ctx) {
     return { kind: 'accept', content: [{ type: 'text', text: filtered }] }
   })
 
-  process.stderr.write('[dsh-feishu] tool trim: MCP packs + glob skip node_modules\n')
+  process.stderr.write(`[dsh-feishu] tool trim: MCP packs + glob skip node_modules\n`)
 }

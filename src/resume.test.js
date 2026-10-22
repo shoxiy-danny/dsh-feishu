@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createCardStore } from './cards.js'
-import { lockResume, presentResume, resumePickFailed } from './resume.js'
+import { lockResume, presentResume, resumePageCard, resumePaging, resumePickFailed } from './resume.js'
 
 test('resumePickFailed only matches switch errors', () => {
   assert.equal(resumePickFailed('切不过去：会话正被另一个窗口占用'), true)
@@ -45,6 +45,37 @@ test('presentResume locks previous card when replaced', async () => {
   const leftover = store.finds('app', 'c', 'resume')
   assert.equal(leftover.length, 1)
   store.settle(leftover[0].id, { abort: true, reason: 'test' })
+})
+
+test('resumePaging clamps page and empty list', () => {
+  assert.deepEqual(resumePaging(0, 3), { page: 1, pages: 1, total: 0 })
+  assert.deepEqual(resumePaging(8, 1), { page: 1, pages: 1, total: 8 })
+  assert.deepEqual(resumePaging(9, 2), { page: 2, pages: 2, total: 9 })
+  assert.deepEqual(resumePaging(20, 99), { page: 3, pages: 3, total: 20 })
+  assert.deepEqual(resumePaging(20, 0), { page: 1, pages: 3, total: 20 })
+  assert.deepEqual(resumePaging(20, 'x'), { page: 1, pages: 3, total: 20 })
+})
+
+test('resumePageCard rebuilds the same token', async () => {
+  const rec = { id: 'tok', appId: 'app', chatId: 'c' }
+  const bridge = {
+    async listResumeItems(appId, chatId, page) {
+      assert.equal(appId, 'app')
+      assert.equal(chatId, 'c')
+      assert.equal(page, '2')
+      return {
+        items: [{ n: 9, title: '第九' }],
+        page: 2,
+        pages: 3,
+        total: 20,
+      }
+    },
+  }
+  const { view, card } = await resumePageCard(rec, bridge, '2')
+  assert.equal(view.page, 2)
+  assert.equal(card.header.title.content, '选择会话')
+  const pick = card.body.elements.find((el) => el.tag === 'button' && el.behaviors?.[0]?.value?.op === 'pick')
+  assert.deepEqual(pick.behaviors[0].value, { kind: 'resume', token: 'tok', op: 'pick', n: '9' })
 })
 
 test('lockResume removes buttons', async () => {

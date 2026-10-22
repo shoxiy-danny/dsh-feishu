@@ -50,10 +50,10 @@ function walkHeaders(filePath, excludes) {
 function readHeader(abs) {
   try {
     const buf = readFileSync(abs)
-    if (buf.length > MAX_BYTES) return `${abs} (skipped, over ${MAX_BYTES} bytes)`
+    if (buf.length > MAX_BYTES) return `${abs}（超过 ${MAX_BYTES} 字节，已跳过）`
     return `### ${abs}\n\n${escapePrompt(buf.toString('utf8').trim())}`
   } catch (err) {
-    return `### ${abs}\n\n(read failed: ${err.message})`
+    return `### ${abs}\n\n（读失败：${err.message}）`
   }
 }
 
@@ -76,7 +76,7 @@ export function attachHeaders(ctx, settings) {
       const files = id ? bySession.get(id) : null
       if (!files || files.size === 0) return ''
       return [
-        'CLAUDE.md / AGENTS.md found on paths opened in this session (deduped, mutable).',
+        '本会话已打开路径上的 CLAUDE.md / AGENTS.md（去重，可变区）。',
         ...[...files].map(readHeader),
       ].join('\n\n')
     },

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 
 export const CLI_APP_ID = 'cli'
 
@@ -74,8 +75,10 @@ export function createCliLark({ emit } = {}) {
     return true
   }
 
-  async function downloadResource() {
-    return null
+  async function downloadResource(_messageId, fileKey, _type) {
+    const path = String(fileKey || '')
+    if (!path.startsWith('/')) return null
+    return readFileSync(path)
   }
 
   async function sendFile(chatId, filePath, opts = {}) {
@@ -87,7 +90,7 @@ export function createCliLark({ emit } = {}) {
       voice: Boolean(opts.voice),
       at: Date.now(),
     })
-    return `file recorded (${filePath})`
+    return `文件已记录 (${filePath})`
   }
 
   function start() {
@@ -126,13 +129,14 @@ export function createCliLark({ emit } = {}) {
 }
 
 export function makeInbound({ chatId = DEFAULT_CHAT, text = '', resources = [] } = {}) {
+  const list = Array.isArray(resources) ? resources : []
   return {
     senderId: 'cli-local',
     chatId: String(chatId || DEFAULT_CHAT),
     chatType: 'p2p',
     messageId: `cli-in-${randomUUID()}`,
-    messageType: 'text',
+    messageType: list.some((res) => res?.kind === 'image') ? 'image' : 'text',
     text: String(text || ''),
-    resources: Array.isArray(resources) ? resources : [],
+    resources: list,
   }
 }

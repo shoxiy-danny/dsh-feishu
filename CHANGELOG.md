@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.2.0 — 2026-10-22
+
+Sync with the private build. Everything below is opt-in through env vars, so a default install still behaves like 0.1.9 with `dsf` only.
+
+**Model table is data, not code.** `bridge.js` no longer carries a hardcoded alias table; it reads `models.js`, which already loaded `DSH_FEISHU_MODELS` + builtin `dsf`. Each entry may now set `tier` (`pro` / `flash` / `cb` / `other`), `short`, and `vision`. `/model` with no argument posts a picker card grouped by tier. Switching to a model without `vision: true` rewrites existing image blocks in the session into path text.
+
+**Native images are opt-in per model.** Inbound images are passed as image blocks only when the selected model has `vision: true`; otherwise the path + OmniCore flow is unchanged. New attachments strip stale image blocks from the surface first, and blocks whose attachment object is gone degrade to a path line instead of failing the turn. Rich-text (post) messages now also yield their attached files.
+
+**`/usage`.** Scans `$DSH_HOME/sessions/` and totals tokens per model and per bot (requests, input, output, cache rate) over 7 days / today / all, as text or a card. Bot names come from `DSH_FEISHU_BOT_LABELS`; previously the bot list was hardcoded.
+
+**`/status` is a card.** Same numbers, now a teal card with tiles; text form kept for the CLI bot. Session title is resolved from `sessionQuery.readTitle` when available.
+
+**Resume paging.** `/resume` shows 8 per page with pager buttons; >50 known sessions no longer truncate silently.
+
+**Ask cards support multi-select.** `ask_user_question` with `multiSelect` renders a checkbox form plus a submit button; the submit path is wired in `index.js`. Single-select stays a two-per-row grid.
+
+**`/clear` receipt is a card** (indigo) and now states the current model.
+
+**Guard.** Killing the daemon itself (`pkill -f dsh-<name>`) is caught. `rm` targets containing unexpanded shell variables are no longer misread as home-dir paths, so `rm -f "$TMP_FILE"` stops raising a card. Optional restart-script rewrite: set `DSH_FEISHU_RESTART_SCRIPT` and a bash call to that script with no `appId::chatId` gets the current window appended.
+
+**Session API compatibility.** `microcompact` and `vision` read the surface through `eventAt` / `snapshotEvents` when present, and `surfaceOp` now uses `startSeq` / `endSeq` (dsh >= 0.1.7-rc.1). Image stripping for text-only models runs on resume and on model switch.
+
+**CLI socket.** `clear` command, and `send` accepts `-b <appId>` / `-m <model>` for targeted delivery. Socket default is unchanged (`/tmp/dsh-feishu-cli.sock`).
+
+**Prompts 0.1.10** — image handling follows `vision`, restart goes through `DSH_FEISHU_RESTART_SCRIPT`, scripts must ask first, page fetching is tiered.
+
 ## 0.1.9 — 2026-09-11
 
 Packaged prompts now describe three-layer memory (global index, project INDEX, daily logs), scratch notes (`~/notes.md`), and `/bye` handoff. Copy-paste templates and skills live under `examples/memory/`, `examples/project/`, `examples/skills/{bye,note}/`. Skills are not auto-installed. Plugin runtime unchanged: still a pointer via `DSH_FEISHU_MEMORY_DIR`.

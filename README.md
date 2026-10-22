@@ -82,15 +82,29 @@ Agent 自己多轮推进。进程重启后 **不会** 偷偷接着烧，要在�
 
 ### 斜杠命令就在聊天框
 
-`/stop` `/clear` `/model` `/status` `/compact` `/resume` `/rename` `/goal` `/bye`
+`/stop` `/clear` `/model` `/status` `/usage` `/compact` `/resume` `/rename` `/goal` `/bye`
 
 不支持的 `/` 会直接告诉你本期有哪些。完整表见 [docs/handbook.md](docs/handbook.md)。
 
 ### 高危审核卡 / 提问卡
 
-未点名的 `rm`、`find -delete`、破坏性 git 会挂起，飞书出一张橙卡。点「允许这一次」才跑；打字同意不算批准。
+未点名的 `rm`、`find -delete`、破坏性 git、杀自己的进程会挂起，飞书出一张橙卡。点「允许这一次」才跑；打字同意不算批准。目标路径里带未展开的 shell 变量（`$TMP_FILE`、`$(mktemp)`）不会被误判。
 
-需要选择时模型调 `ask_user_question`，出蓝卡。选项两列一排带序号，说明是灰字菜单；可以点选项，也可以在卡内填空提交（输入框默认一行），也可以直接打字。先到的算数。开放平台须订 `card.action.trigger`。
+需要选择时模型调 `ask_user_question`，出蓝卡。选项两列一排带序号，说明是灰字菜单；可以点选项，也可以在卡内填空提交（输入框默认一行），也可以直接打字。先到的算数。多选问题出勾选表单，勾完点「提交选择」。开放平台须订 `card.action.trigger`。
+
+### 模型切换卡片
+
+发 `/model` 不填参数，出一张按档位分组的选型卡（`DSH_FEISHU_MODELS` 里给每个模型标 `tier` 和 `short`），点一下切过去。卡上还能点「保持当前」。`/model <别名>` 照旧一行文字回执。
+
+切到不吃图（`vision` 不为 true）的模型时，会话里已有的图片块就地换成路径文字，避免下一轮请求 400。
+
+### 用量面板
+
+`/usage` 扫 `$DSH_HOME/sessions/` 下的会话日志，按模型和 bot 汇总 token：总量、请求数、输入、输出、缓存命中率，默认近 7 天。`/usage today`、`/usage all` 换窗口。Bot 名走 `DSH_FEISHU_BOT_LABELS`。
+
+### 会话卡翻页
+
+`/resume` 每页 8 条，超过就出翻页按钮。翻页只换卡片内容，不新开对话。
 
 ### 重启自己接上
 
@@ -102,7 +116,11 @@ Agent 自己多轮推进。进程重启后 **不会** 偷偷接着烧，要在�
 
 ### 多模态按飞书的方式走
 
-图 / 语音 / 文件落到本地 inbox，把路径写给模型。**不**把图片塞进 session image block。回图、回文件、回语音走 `send_file`。
+图 / 语音 / 文件落到本地 inbox（保留原文件名），把路径写给模型。**不**无条件把图片塞进 session image block：只有模型在 `DSH_FEISHU_MODELS` 里标了 `vision: true` 才原生收图，其余仍走路径 + OmniCore 识图。回图、回文件、回语音走 `send_file`。
+
+收新图 / 压缩包之前会先把历史里的图片块换成路径，避免旧图串到新一轮。图片对象在磁盘上已经没了的话，引用它的历史块降级成一行路径文字，不再整轮失败。
+
+富文本（post）里的图片和附件文件都会被解析出来，不会漏收。
 
 <a id="who"></a>
 ## 适合谁 / 不适合谁
@@ -242,7 +260,7 @@ The same process holds 2–3 Feishu apps. Sessions are keyed by `(appId, chat_id
 
 ### Slash commands in the composer
 
-`/stop` `/clear` `/model` `/status` `/compact` `/resume` `/rename` `/goal` `/bye`
+`/stop` `/clear` `/model` `/status` `/usage` `/compact` `/resume` `/rename` `/goal` `/bye`
 
 Unknown `/` replies with the supported list. Full table: [docs/handbook.md](docs/handbook.md). `/resume` with no number sends a session card. The model can rename via `SlashCommand({ command: "/rename …" })`.
 
@@ -252,7 +270,21 @@ After 100K tokens, large read / glob / grep / bash / search results stay intact 
 
 ### Approval cards / ask-user cards
 
-Unnamed `rm`, `find -delete`, and destructive git pause on an orange card. Tap **Allow once** to run. Typing yes does not approve. Choices go through `ask_user_question` (blue card): options sit in a numbered two-per-row grid with a grey description menu, tap one, submit the one-row form, or type a reply. First answer wins. Subscribe to `card.action.trigger` on the open platform.
+Unnamed `rm`, `find -delete`, destructive git, and killing the daemon itself pause on an orange card. Tap **Allow once** to run. Typing yes does not approve. Paths containing unexpanded shell variables (`$TMP_FILE`, `$(mktemp)`) are not misread as home-dir targets. Choices go through `ask_user_question` (blue card): options sit in a numbered two-per-row grid with a grey description menu, tap one, submit the one-row form, or type a reply. Multi-select questions render a checkbox form with a submit button. Subscribe to `card.action.trigger` on the open platform.
+
+### Model picker card
+
+`/model` with no argument posts a picker grouped by `tier` (from `DSH_FEISHU_MODELS`, with `short` labels). Tap one to switch; there is also a "keep current" button. `/model <alias>` still replies in one line.
+
+Switching to a model without `vision: true` rewrites existing image blocks in the session into path text so the next request does not 400.
+
+### Usage panel
+
+`/usage` scans session logs under `$DSH_HOME/sessions/` and totals tokens per model and per bot: requests, input, output, cache hit rate. Default window is the last 7 days; `/usage today` and `/usage all` switch it. Bot names come from `DSH_FEISHU_BOT_LABELS`.
+
+### Resume paging
+
+`/resume` shows 8 sessions per page with pager buttons when there are more. Paging edits the same card instead of opening a new thread.
 
 ### Restart reattaches itself
 

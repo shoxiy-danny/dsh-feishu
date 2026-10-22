@@ -51,18 +51,29 @@ export function attachCliServer({ socketPath = DEFAULT_SOCK, lark, bridge, onInb
         reply(sock, { id, ok: true, events: lark.drain(chatId) })
         return
       }
-      if (cmd !== 'send') {
-        reply(sock, { id, ok: false, error: `unknown cmd ${cmd}` })
-        return
-      }
-
-      const text = String(req.text ?? '')
-      // 定向投递：req.appId 指定真实 bot 时走 bridge.deliver，回复从该 bot 发进对应飞书会话
-      if (req.appId && req.appId !== CLI_APP_ID) {
+      if (cmd === 'clear') {
         if (!bridge) {
           reply(sock, { id, ok: false, error: 'bridge unavailable' })
           return
         }
+        const appId = String(req.appId || '')
+        if (!appId || appId === CLI_APP_ID) {
+          reply(sock, { id, ok: false, error: 'clear requires -b bot' })
+          return
+        }
+        await bridge.clear(appId, chatId)
+        process.stderr.write(`[dsh-feishu] cli clear ${appId} chat=${chatId}\n`)
+        reply(sock, { id, ok: true, cleared: true })
+        return
+      }
+      // 定向投递：req.appId 指定真实 bot 时走 bridge.deliver，回复从该 bot 发进对应飞书会话
+      if (cmd === 'send' && req.appId && req.appId !== CLI_APP_ID) {
+        if (!bridge) {
+          reply(sock, { id, ok: false, error: 'bridge unavailable' })
+          return
+        }
+        const text = String(req.text ?? '')
+        process.stderr.write(`[dsh-feishu] cli send ${req.appId} chat=${chatId} model=${req.model || '-'} wait=${req.wait !== false}\n`)
         await bridge.deliver(String(req.appId), chatId, text, undefined, req.model)
         if (req.wait !== false && typeof waitIdle === 'function') {
           try { await waitIdle(String(req.appId), chatId) } catch { /* no session yet */ }
@@ -70,6 +81,12 @@ export function attachCliServer({ socketPath = DEFAULT_SOCK, lark, bridge, onInb
         reply(sock, { id, ok: true, inboundId: `deliver-${chatId}` })
         return
       }
+      if (cmd !== 'send') {
+        reply(sock, { id, ok: false, error: `unknown cmd ${cmd}` })
+        return
+      }
+
+      const text = String(req.text ?? '')
       const inbound = makeInbound({ chatId, text, resources: req.resources })
       await onInbound(inbound)
       if (req.wait !== false && typeof waitIdle === 'function') {

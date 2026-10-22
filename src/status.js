@@ -141,11 +141,156 @@ function pctOf(used, total) {
   return Math.max(0, Math.round((used / total) * 100))
 }
 
-export function formatStatus({ alias, model, hasSession, context, agentStatus, host }) {
+function toneOf(pct) {
+  if (pct == null || !Number.isFinite(pct)) return 'neutral'
+  if (pct >= 90) return 'red'
+  if (pct >= 70) return 'orange'
+  return 'green'
+}
+
+function statusZh(agentStatus) {
+  if (agentStatus === 'running') return '运行中'
+  if (agentStatus === 'idle') return '空闲'
+  return agentStatus || '—'
+}
+
+function tileElements({ label, value, hint, color }) {
+  const elements = [
+    {
+      tag: 'div',
+      text: {
+        tag: 'plain_text',
+        content: String(label),
+        text_size: 'notation',
+        text_align: 'center',
+        text_color: 'grey',
+      },
+    },
+    {
+      tag: 'div',
+      text: {
+        tag: 'plain_text',
+        content: String(value),
+        text_size: 'heading',
+        text_align: 'center',
+        text_color: 'default',
+      },
+    },
+  ]
+  if (hint) {
+    elements.push({
+      tag: 'markdown',
+      content: `<text_tag color='${color || 'neutral'}'>${hint}</text_tag>`,
+      text_align: 'center',
+      text_size: 'notation',
+    })
+  }
+  return elements
+}
+
+function metricRow(items, margin) {
+  return {
+    tag: 'column_set',
+    flex_mode: items.length <= 2 ? 'bisect' : 'trisect',
+    horizontal_spacing: '8px',
+    horizontal_align: 'center',
+    margin: margin || '8px 0 0 0',
+    columns: items.map((item) => ({
+      tag: 'column',
+      width: 'weighted',
+      weight: 1,
+      background_style: 'grey',
+      padding: '8px',
+      vertical_spacing: '4px',
+      vertical_align: 'top',
+      elements: tileElements(item),
+    })),
+  }
+}
+
+export function statusCard({ alias, model, hasSession, context, agentStatus, host, title }) {
+  const name = alias || '?'
+  const full = model && model !== name ? String(model) : ''
+  const h = host || collectHost()
+  const heading = String(title || '').trim() || (hasSession ? '未命名会话' : '无会话')
+  const mem = h.mem || { total: 0, used: 0 }
+  const disk = h.disk || { total: 0, used: 0 }
+  const cpu = h.cpu || { n: 1, pct: 0 }
+  const memPct = mem.total ? pctOf(mem.used, mem.total) : null
+  const diskPct = disk.total ? pctOf(disk.used, disk.total) : null
+  const cpuPct = Number.isFinite(cpu.pct) ? cpu.pct : 0
+  const ctxPct = hasSession && context ? context.pct : null
+  const phase = statusZh(agentStatus)
+
+  let ctxValue = '无会话'
+  let ctxHint = ''
+  if (hasSession && !context) {
+    ctxValue = '暂不可测'
+  } else if (hasSession && context) {
+    ctxValue = `${context.pct}%`
+    ctxHint = `${formatTokensK(context.total)} / ${formatTokensK(context.window)}`
+  }
+
+  const hot = (ctxPct ?? 0) >= 90 || (memPct ?? 0) >= 90 || (diskPct ?? 0) >= 90
+  const headerTemplate = agentStatus === 'running' ? 'blue' : hot ? 'orange' : 'turquoise'
+  const tags = []
+  if (agentStatus) {
+    tags.push({
+      tag: 'text_tag',
+      text: { tag: 'plain_text', content: phase },
+      color: agentStatus === 'running' ? 'blue' : agentStatus === 'idle' ? 'green' : 'neutral',
+    })
+  }
+
+  return {
+    schema: '2.0',
+    config: { update_multi: true, width_mode: 'fill' },
+    header: {
+      title: { tag: 'plain_text', content: heading },
+      subtitle: { tag: 'plain_text', content: h.hostname || '' },
+      template: headerTemplate,
+      icon: { tag: 'standard_icon', token: 'diagnose_filled' },
+      text_tag_list: tags,
+    },
+    body: {
+      elements: [
+        { tag: 'markdown', content: '**会话**', text_size: 'heading' },
+        metricRow([
+          { label: '模型', value: name, hint: full, color: 'blue' },
+          { label: '上下文', value: ctxValue, hint: ctxHint, color: toneOf(ctxPct) },
+        ]),
+        { tag: 'markdown', content: '**主机**', text_size: 'heading' },
+        metricRow([
+          {
+            label: '内存',
+            value: memPct == null ? '不可读' : `${memPct}%`,
+            hint: mem.total ? `${formatBytes(mem.used)} / ${formatBytes(mem.total)}` : '',
+            color: toneOf(memPct),
+          },
+          {
+            label: '磁盘',
+            value: diskPct == null ? '不可读' : `${diskPct}%`,
+            hint: disk.total ? `${formatBytes(disk.used)} / ${formatBytes(disk.total)}` : '',
+            color: toneOf(diskPct),
+          },
+          {
+            label: 'CPU',
+            value: `${cpuPct}%`,
+            hint: `${cpu.n || 1} 核`,
+            color: toneOf(cpuPct),
+          },
+        ], '4px 0 0 0'),
+      ],
+    },
+  }
+}
+
+export function formatStatus({ alias, model, hasSession, context, agentStatus, host, title }) {
   const name = alias || '?'
   const full = model && model !== name ? ` = ${model}` : ''
+  const heading = String(title || '').trim() || (hasSession ? '未命名会话' : '无会话')
   const lines = [
-    '会话',
+    heading,
     `模型  ${name}${full}`,
   ]
   if (!hasSession) {

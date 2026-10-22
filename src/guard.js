@@ -4,10 +4,11 @@ import { dirname, isAbsolute, resolve } from 'node:path'
 import { approvalCard, lockedCard, waitCard } from './cards.js'
 
 const DENY =
-  'Blocked a high-risk command. Tap Allow once on the Feishu card. Typing yes does not approve. Single-file and skill edits are fine.'
+  '高危命令已拦，没执行。点卡片「允许这一次」才会跑。打字同意不算批准。改单个文件 / skill 不用审批。'
 
 const HOME = homedir().replace(/\/+$/, '')
 
+// 点名 skill 目录下的删除不算大范围；profile 私有的 skills 目录也算
 const SKILL_RE = /(?:^|\/)\.claude\/skills(?:\/|$)|(?:^|\/)\.dsh\/skills(?:\/|$)/
 const GIT_DIR_RE = /(?:^|\/)\.git(?:\/|$)/
 
@@ -25,10 +26,23 @@ const WIPEFS = /\bwipefs\b/
 const DROP_DB = /\b(?:drop\s+database|drop\s+schema|truncate\s+table)\b/i
 const FORCE_PUSH = /\bgit\s+push\b[\s\S]{0,60}(?:--force|--force-with-lease|-f)\b/
 const GIT_PUSH_DELETE = /\bgit\s+push\b[\s\S]{0,40}--delete\b/
-const KILL_SELF = /\b(?:pkill|killall|kill)\b[\s\S]{0,40}(?:\bdsh\b|\bfeishu\b)/
+// 自杀式重启：拿 pkill/kill 打自己的常驻进程。
+// 除 dsh / feishu 外，`dsh-<名字>` 这类 profile 常驻进程也算（`pkill -f dsh-<profile>` 能绕过去）。
+const KILL_SELF = /\b(?:pkill|killall|kill)\b[\s\S]{0,40}(?:\bdsh\b|\bfeishu\b|\bdsh-[\w-]+\b)/
 
 function stripQuotes(token) {
   return String(token || '').replace(/^['"]|['"]$/g, '')
+}
+
+// rm 目标里带未展开的 shell 变量（`$VAR` / `${VAR}` / 反引号）时，值静态看不到。
+// 把它当字面路径会在 cwd=家目录时解析成 `~/<变量名>`，误判成「家目录下一层」。
+// 例外：`~` / `$HOME` / `${HOME}` 前缀能确定展开，仍走原判定。
+const HOME_PREFIX_RE = /^(?:~|\$HOME|\$\{HOME\})(?:\/|$)/
+const SHELL_VAR_RE = /\$\(|\$\{|\$[A-Za-z0-9_@*#?$!-]|`/
+
+function isDynamicPath(token) {
+  if (HOME_PREFIX_RE.test(token)) return false
+  return SHELL_VAR_RE.test(token)
 }
 
 function expandHome(path) {
@@ -49,6 +63,7 @@ export function isDangerousRemovalPath(rawPath, cwd = HOME) {
   if (!token) return true
   if (token === '*' || token.endsWith('/*') || token.endsWith('/*/') || token === './*') return true
   if (token === '.' || token === '..') return true
+  if (isDynamicPath(token)) return false
 
   const expanded = expandHome(token)
   const absolute = isAbsolute(expanded) || expanded.startsWith('/')
@@ -88,22 +103,83 @@ function rmLooksBroad(command) {
   return paths.some((path) => isDangerousRemovalPath(path))
 }
 
+function shellArgs(s) {
+  const out = []
+  let i = 0
+  while (i < s.length) {
+    while (i < s.length && /\s/.test(s[i])) i += 1
+    if (i >= s.length) break
+    const q = s[i]
+    if (q === '"' || q === "'") {
+      i += 1
+      let buf = ''
+      while (i < s.length && s[i] !== q) {
+        if (s[i] === '\\' && q === '"' && i + 1 < s.length) {
+          buf += s[i + 1]
+          i += 2
+          continue
+        }
+        buf += s[i]
+        i += 1
+      }
+      if (i < s.length) i += 1
+      out.push(buf)
+    } else {
+      let buf = ''
+      while (i < s.length && !/\s/.test(s[i])) {
+        buf += s[i]
+        i += 1
+      }
+      out.push(buf)
+    }
+  }
+  return out
+}
+
+function isChatKey(token) {
+  return /^[\w.-]+::[\w.-]+$/.test(String(token || ''))
+}
+
+// bash 跑自己的重启脚本时，缺 appId::chatId 就补当前窗，重启后的回执知道往哪发。
+// 脚本名走 DSH_FEISHU_RESTART_SCRIPT（basename 匹配）；没设就完全不碰命令。
+export function rewriteRestartCommand(command, chatKey, scriptName = '') {
+  if (!chatKey || !isChatKey(chatKey)) return command
+  const base = String(scriptName || '').split('/').pop()
+  if (!base) return command
+  const esc = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`(?:^|[;&|\\n\`\\s(])(?:bash\\s+)?(?:\\S*/)?${esc}\\b`)
+  const found = command.search(re)
+  if (found < 0) return command
+  const scriptAt = command.indexOf(base, found)
+  if (scriptAt < 0) return command
+  const after = command.slice(scriptAt + base.length)
+  const cut = after.search(/[;&|\n]/)
+  const argsPart = cut < 0 ? after : after.slice(0, cut)
+  const tail = cut < 0 ? '' : after.slice(cut)
+  const args = shellArgs(argsPart)
+  if (args.some(isChatKey)) return command
+  const quoted = JSON.stringify(chatKey)
+  const head = command.slice(0, scriptAt + base.length)
+  if (args.length === 0) return `${head} "" ${quoted}${tail}`
+  return `${head}${argsPart.replace(/\s+$/, '')} ${quoted}${tail}`
+}
+
 export function classifyDanger(name, args) {
   if (name !== 'bash') return null
   const command = String(args?.command || '')
   if (!command.trim()) return null
 
-  if (KILL_SELF.test(command)) return 'kill dsh process'
+  if (KILL_SELF.test(command)) return '自杀重启 / 杀本进程'
   if (MKFS.test(command) || DD_DISK.test(command) || SHRED.test(command) || WIPEFS.test(command)) {
-    return 'disk wipe'
+    return '磁盘擦除'
   }
-  if (DROP_DB.test(command)) return 'drop database'
-  if (FORCE_PUSH.test(command) || GIT_PUSH_DELETE.test(command)) return 'destructive git push'
+  if (DROP_DB.test(command)) return '删库'
+  if (FORCE_PUSH.test(command) || GIT_PUSH_DELETE.test(command)) return '破坏性 git push'
   if (GIT_CLEAN_FORCE.test(command) || GIT_RESET_HARD.test(command) || GIT_CHECKOUT_BROAD.test(command) || GIT_RESTORE_BROAD.test(command)) {
-    return 'destructive git rewind'
+    return '破坏性 git 回退'
   }
-  if (FIND_DELETE.test(command) || XARGS_RM.test(command)) return 'bulk delete'
-  if (RM_TOKEN.test(command) && rmLooksBroad(command)) return 'unnamed or broad rm'
+  if (FIND_DELETE.test(command) || XARGS_RM.test(command)) return '批量删除'
+  if (RM_TOKEN.test(command) && rmLooksBroad(command)) return '未点名或大范围 rm'
   return null
 }
 
@@ -112,14 +188,24 @@ export function attachGuard(ctx, { routeOf, store } = {}) {
     process.stderr.write('[dsh-feishu] high-risk bash guard off\n')
     return
   }
+  const restartScript = process.env.DSH_FEISHU_RESTART_SCRIPT || ''
   ctx.on('tools/pre-execute', async (exec, next) => {
+    const route = exec.agent && routeOf ? routeOf(exec.agent.id) : null
+    if (exec.name === 'bash' && exec.arguments && route?.appId && route?.chatId && restartScript) {
+      const key = `${route.appId}::${route.chatId}`
+      const command = String(exec.arguments.command || '')
+      const nextCmd = rewriteRestartCommand(command, key, restartScript)
+      if (nextCmd !== command) {
+        exec.arguments = { ...exec.arguments, command: nextCmd }
+        process.stderr.write(`[dsh-feishu] restart continue chatKey=${key}\n`)
+      }
+    }
     const kind = classifyDanger(exec.name, exec.arguments)
     if (!kind) return next()
     const command = String(exec.arguments?.command || '')
-    const route = exec.agent && routeOf ? routeOf(exec.agent.id) : null
     if (!route?.lark || !route.chatId || !store) {
       process.stderr.write(`[dsh-feishu] guard deny ${kind} (no card route)\n`)
-      return { kind: 'deny', reason: `${DENY} (${kind})` }
+      return { kind: 'deny', reason: `${DENY}（${kind}）` }
     }
 
     const id = randomUUID()
@@ -129,7 +215,7 @@ export function attachGuard(ctx, { routeOf, store } = {}) {
       messageId = await route.lark.sendCard(route.chatId, card)
     } catch (err) {
       process.stderr.write(`[dsh-feishu] guard card failed: ${err}\n`)
-      return { kind: 'deny', reason: `${DENY} (${kind}; card failed)` }
+      return { kind: 'deny', reason: `${DENY}（${kind}；发卡失败）` }
     }
 
     process.stderr.write(`[dsh-feishu] guard wait ${kind} token=${id}\n`)
@@ -167,7 +253,7 @@ export function attachGuard(ctx, { routeOf, store } = {}) {
       body: `原因：\`${kind}\`\n\`\`\`bash\n${command}\n\`\`\``,
     }))
     process.stderr.write(`[dsh-feishu] guard deny ${kind} ${title}\n`)
-    return { kind: 'deny', reason: `${DENY} (${kind})` }
+    return { kind: 'deny', reason: `${DENY}（${kind}）` }
   })
   process.stderr.write('[dsh-feishu] high-risk bash guard on (card)\n')
 }

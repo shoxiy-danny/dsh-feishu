@@ -3,12 +3,17 @@
     "provider": "deepseek-official",
     "model": "deepseek-flash",
     "label": "dsf = deepseek-flash",
-    "window": 1000000
+    "window": 1000000,
+    "short": "deepseek-flash",
+    "tier": "flash",
+    "vision": true
   },
   "oa": {
     "provider": "my-openai",
     "model": "gpt-4.1",
     "label": "oa = gpt-4.1",
-    "window": 1048576
+    "window": 1048576,
+    "short": "gpt-4.1",
+    "tier": "pro"
   }
 }

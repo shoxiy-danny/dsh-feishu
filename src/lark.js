@@ -439,7 +439,7 @@ function extractText(messageType, content) {
   }
 }
 
-function parseResources(messageType, content) {
+export function parseResources(messageType, content) {
   try {
     const parsed = JSON.parse(content)
     if (messageType === 'image' && parsed.image_key) {
@@ -455,7 +455,7 @@ function parseResources(messageType, content) {
       return [{ kind: 'video', fileKey: parsed.file_key || parsed.image_key, name: parsed.file_name }]
     }
     if (messageType === 'post') {
-      return parsePostImages(parsed)
+      return [...parsePostImages(parsed), ...parsePostFiles(parsed)]
     }
     return []
   } catch {
@@ -463,12 +463,16 @@ function parseResources(messageType, content) {
   }
 }
 
-function parsePostImages(post) {
+function postLang(post) {
   let lang = post.zh_cn ?? post.en_us ?? post.ja_jp ?? Object.values(post)[0]
   if (typeof lang !== 'object' || lang === null) lang = post
+  return lang
+}
+
+function parsePostImages(post) {
+  const lang = postLang(post)
   const out = []
-  for (const paragraph of lang?.content ?? []) {
-    if (!Array.isArray(paragraph)) continue
+  for (const paragraph of paragraphsOf(lang, post)) {
     for (const node of paragraph) {
       if (node?.tag === 'img' && node.image_key) {
         out.push({ kind: 'image', fileKey: node.image_key })
@@ -476,6 +480,35 @@ function parsePostImages(post) {
     }
   }
   return out
+}
+
+// 飞书富文本带文件时，文件不在正文节点里，挂在 content 顶层 files。
+function parsePostFiles(post) {
+  const lang = postLang(post)
+  const out = []
+  const seen = new Set()
+  const push = (fileKey, name) => {
+    if (!fileKey || seen.has(fileKey)) return
+    seen.add(fileKey)
+    out.push({ kind: 'file', fileKey, ...(name ? { name } : {}) })
+  }
+  for (const file of post.files ?? lang?.files ?? []) {
+    if (file?.is_folder) continue
+    push(file?.file_key, file?.file_name)
+  }
+  for (const paragraph of paragraphsOf(lang, post)) {
+    for (const node of paragraph) {
+      if (node?.tag !== 'file' && node?.tag !== 'media') continue
+      push(node.file_key, node.file_name)
+    }
+  }
+  return out
+}
+
+function paragraphsOf(lang, post) {
+  const list = lang?.content ?? post?.content ?? lang?.content_v2 ?? post?.content_v2
+  if (!Array.isArray(list)) return []
+  return list.filter(Array.isArray)
 }
 
 async function toBuffer(resp) {

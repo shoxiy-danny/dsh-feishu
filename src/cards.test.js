@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { askCard, createCardStore, formField, goalCard, modelCard, parseCardAction, resumeCard } from './cards.js'
+import { askCard, checkedPicks, createCardStore, formField, formList, goalCard, lockedCard, modelCard, parseCardAction, resumeCard } from './cards.js'
 
 test('settle is first-wins', () => {
   const store = createCardStore()
@@ -72,6 +72,17 @@ test('parseCardAction reads form_value', () => {
   assert.equal(formField(parsed, 'objective'), '把 README 补上安装步骤')
 })
 
+test('lockedCard keeps indigo header for /clear', () => {
+  const card = lockedCard({
+    title: '会话已清空',
+    template: 'indigo',
+    body: '已清空，下一句会开新会话。当前模型：grok-4.7',
+  })
+  assert.equal(card.header.title.content, '会话已清空')
+  assert.equal(card.header.template, 'indigo')
+  assert.equal(card.body.elements[0].content, '已清空，下一句会开新会话。当前模型：grok-4.7')
+})
+
 test('goalCard wires form submit and action buttons', () => {
   const card = goalCard({
     id: 'token-goal-1',
@@ -120,6 +131,70 @@ test('askCard always includes answer form', () => {
   assert.equal(buttons[0].text.content, '1 · HTML')
 })
 
+test('askCard multiSelect uses checker list, not dropdown or option buttons', () => {
+  const card = askCard({
+    id: 'ask-multi-1',
+    header: '多选测试',
+    question: '选几种吃的？',
+    options: [
+      { label: '火锅', description: '热的' },
+      { label: '烧烤' },
+      { label: '日料' },
+    ],
+    multiSelect: true,
+  })
+  const forms = card.body.elements.filter((el) => el.tag === 'form')
+  assert.equal(forms.length, 2)
+  const pick = forms.find((el) => el.elements.some((item) => item.tag === 'checker'))
+  assert.ok(pick)
+  const checkers = pick.elements.filter((el) => el.tag === 'checker')
+  assert.equal(checkers.length, 3)
+  assert.deepEqual(checkers.map((el) => el.name), ['pick_0', 'pick_1', 'pick_2'])
+  assert.equal(checkers[0].text.tag, 'lark_md')
+  assert.match(checkers[0].text.content, /火锅/)
+  assert.equal(checkers[1].text.content, '2 · 烧烤')
+  const submit = pick.elements.find((el) => el.tag === 'button')
+  assert.equal(submit.name, 'submit_picks')
+  assert.equal(submit.form_action_type, 'submit')
+  assert.deepEqual(submit.behaviors[0].value, { kind: 'ask', token: 'ask-multi-1', op: 'multi' })
+  assert.equal(pick.elements.some((el) => el.tag === 'multi_select_static'), false)
+  const buttons = collectButtons(card.body.elements).filter((b) => b.behaviors?.[0]?.value?.opt)
+  assert.equal(buttons.length, 0)
+  const hint = card.body.elements.find((el) => el.tag === 'markdown' && el.content.includes('提交选择'))
+  assert.ok(hint)
+})
+
+test('formList reads multi_select form_value', () => {
+  const parsed = parseCardAction({
+    event: {
+      action: {
+        tag: 'button',
+        name: 'submit',
+        value: { kind: 'ask', token: 'tok', op: 'multi' },
+        form_value: { picks: ['火锅', ' 烧烤 '] },
+      },
+    },
+  })
+  assert.equal(parsed.value.op, 'multi')
+  assert.deepEqual(formList(parsed, 'picks'), ['火锅', '烧烤'])
+  assert.deepEqual(formList(parsed, 'missing'), [])
+})
+
+test('checkedPicks reads checker form_value', () => {
+  const parsed = parseCardAction({
+    event: {
+      action: {
+        tag: 'button',
+        name: 'submit_picks',
+        value: { kind: 'ask', token: 'tok', op: 'multi' },
+        form_value: { pick_0: true, pick_1: false, pick_2: 'true' },
+      },
+    },
+  })
+  assert.deepEqual(checkedPicks(parsed, ['火锅', '烧烤', '日料']), ['火锅', '日料'])
+  assert.deepEqual(checkedPicks(parsed, []), [])
+})
+
 test('askCard menu lists descriptions and rows pair up', () => {
   const card = askCard({
     id: 'ask-2',
@@ -145,7 +220,7 @@ test('resumeCard wires pick and stay', () => {
     id: 'resume-tok',
     items: [
       { n: 1, title: '当前会话', when: '08-20 10:00', size: '3.4M', current: true },
-      { n: 2, title: '旧会话', when: '08-19 09:00', from: 'Madi', busy: true },
+      { n: 2, title: '旧会话', when: '08-19 09:00', from: 'Bob', busy: true },
     ],
   })
   assert.equal(card.header.title.content, '选择会话')
@@ -159,6 +234,62 @@ test('resumeCard wires pick and stay', () => {
   assert.ok(hints.some((text) => text.includes('3.4M')))
   assert.deepEqual(buttons[2].behaviors[0].value, { kind: 'resume', token: 'resume-tok', op: 'stay' })
   assert.equal(buttons[2].text.content, '都不选，留在当前')
+  assert.equal(card.body.elements.some((el) => el.tag === 'column_set'), false)
+})
+
+test('resumeCard paginates when more than one page', () => {
+  const items = [
+    { n: 9, title: '第九', when: '08-18 09:00' },
+    { n: 10, title: '第十', when: '08-17 08:00' },
+  ]
+  const card = resumeCard({
+    id: 'resume-tok',
+    items,
+    page: 2,
+    pages: 3,
+    total: 20,
+  })
+  const hints = card.body.elements.filter((el) => el.tag === 'markdown').map((el) => el.content)
+  assert.ok(hints.some((text) => text.includes('第 2/3 页 · 共 20 条')))
+  assert.ok(!hints.some((text) => text.includes('/resume')))
+  const buttons = collectButtons(card.body.elements)
+  const prev = buttons.find((el) => el.text.content === '上一页')
+  const next = buttons.find((el) => el.text.content === '下一页')
+  assert.equal(prev.disabled, false)
+  assert.deepEqual(prev.behaviors[0].value, { kind: 'resume', token: 'resume-tok', op: 'page', page: '1' })
+  assert.equal(next.disabled, false)
+  assert.deepEqual(next.behaviors[0].value, { kind: 'resume', token: 'resume-tok', op: 'page', page: '3' })
+})
+
+test('resumeCard disables prev on first page and next on last page', () => {
+  const first = resumeCard({
+    id: 'tok-a',
+    items: [{ n: 1, title: 'A' }],
+    page: 1,
+    pages: 2,
+    total: 9,
+  })
+  const last = resumeCard({
+    id: 'tok-b',
+    items: [{ n: 9, title: 'I' }],
+    page: 2,
+    pages: 2,
+    total: 9,
+  })
+  const firstBtns = collectButtons(first.body.elements)
+  const lastBtns = collectButtons(last.body.elements)
+  const firstPrev = firstBtns.find((el) => el.text.content === '上一页')
+  const firstNext = firstBtns.find((el) => el.text.content === '下一页')
+  const lastPrev = lastBtns.find((el) => el.text.content === '上一页')
+  const lastNext = lastBtns.find((el) => el.text.content === '下一页')
+  assert.equal(firstPrev.disabled, true)
+  assert.equal(firstPrev.behaviors, undefined)
+  assert.equal(firstNext.disabled, false)
+  assert.deepEqual(firstNext.behaviors[0].value.page, '2')
+  assert.equal(lastPrev.disabled, false)
+  assert.deepEqual(lastPrev.behaviors[0].value.page, '1')
+  assert.equal(lastNext.disabled, true)
+  assert.equal(lastNext.behaviors, undefined)
 })
 
 function collectButtons(elements, out = []) {
@@ -173,15 +304,15 @@ function collectButtons(elements, out = []) {
 test('modelCard groups pro first, two per row, marks current, has stay', () => {
   const card = modelCard({
     id: 'model-tok',
-    current: 'oa',
+    current: 'stf',
     groups: [
       {
         key: 'pro', title: 'Pro · 重量级', hint: '硬活',
-        items: [{ alias: 'oa', label: 'oa = gpt-4.1', short: 'gpt-4.1' }, { alias: 'any', label: 'any = some-pro-model', short: 'some-pro-model' }],
+        items: [{ alias: 'glm', label: 'glm = glm-5.3', short: 'glm-5.3' }, { alias: 'grk', label: 'grk = grok-4.6', short: 'grok-4.6' }],
       },
       {
         key: 'flash', title: 'Flash · 轻量级', hint: '快省',
-        items: [{ alias: 'dsf', label: 'dsf = deepseek-flash', short: 'deepseek-flash' }, { alias: 'lit', label: 'lit = some-flash-model', short: 'some-flash-model' }],
+        items: [{ alias: 'dsf', label: 'dsf = deepseek-flash', short: 'deepseek-flash' }, { alias: 'stf', label: 'stf = step-3.7-flash', short: 'step-3.7-flash' }],
       },
     ],
   })
@@ -204,14 +335,26 @@ test('modelCard groups pro first, two per row, marks current, has stay', () => {
 
   const buttons = collectButtons(card.body.elements)
   assert.equal(buttons.length, 5)
-  assert.equal(buttons[0].text.content, '* oa · gpt-4.1')
-  const cur = buttons.find((b) => b.text.content.includes('oa'))
+  assert.equal(buttons[0].text.content, 'glm · glm-5.3')
+  const cur = buttons.find((b) => b.text.content.includes('stf'))
   assert.equal(cur.type, 'primary')
-  assert.equal(cur.text.content, '* oa · gpt-4.1')
-  assert.deepEqual(cur.behaviors[0].value, { kind: 'model', token: 'model-tok', alias: 'oa' })
+  assert.equal(cur.text.content, '* stf · step-3.7-flash')
+  assert.deepEqual(cur.behaviors[0].value, { kind: 'model', token: 'model-tok', alias: 'stf' })
   const plain = buttons.find((b) => b.text.content.includes('dsf'))
   assert.equal(plain.type, 'default')
   const stay = card.body.elements.find((el) => el.tag === 'button' && el.behaviors?.[0]?.value?.op === 'stay')
   assert.ok(stay)
   assert.deepEqual(stay.behaviors[0].value, { kind: 'model', token: 'model-tok', op: 'stay' })
+})
+
+test('modelCard colors CodeBuddy group orange', () => {
+  const card = modelCard({
+    id: 'model-tok',
+    current: 'cds',
+    groups: [
+      { key: 'cb', title: 'CodeBuddy', hint: 'CodeBuddy 通道', items: [{ alias: 'cgp', short: 'cb-glm-5.3' }, { alias: 'cds', short: 'cb-dsf' }] },
+    ],
+  })
+  const title = card.body.elements.find((el) => el.tag === 'markdown' && el.content.includes('CodeBuddy'))
+  assert.match(title.content, /font color='orange'/)
 })

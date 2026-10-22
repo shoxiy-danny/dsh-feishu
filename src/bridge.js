@@ -2,15 +2,93 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { formatGoalError, formatGoalStatus, parseGoalObjective } from './goal.js'
-import { aliasOf, loadModels, selectionFromAlias, windowOf as modelWindow } from './models.js'
-import { collectHost, formatBytes, formatStatus, measureContext, sessionFileBytes } from './status.js'
+import {
+  aliasOf as aliasOfModel,
+  loadModels,
+  modelGroups as groupsOf,
+  selectionFromAlias as selectionOfAlias,
+  visionOf as visionOfModel,
+  windowOf as windowOfModel,
+} from './models.js'
+import { collectHost, formatBytes, formatStatus, measureContext, sessionFileBytes, statusCard } from './status.js'
 import { enableMcp } from './tooltrim.js'
+import { stripMissingSessionImages, stripSessionImages } from './vision.js'
+import { RESUME_PAGE_SIZE, resumePaging } from './resume.js'
+
+// 模型表来自 models.js（DSH_FEISHU_MODELS 指向的 json，外加内置 dsf）。
+// 不硬编码任何私有网关；接线方式与「内置只有 dsf」的公开默认一致。
+const MODELS = loadModels()
+
+function aliasOf(sel) {
+  return aliasOfModel(MODELS, sel)
+}
+
+export function windowOf(sel) {
+  return windowOfModel(MODELS, sel)
+}
+
+export function visionOf(sel) {
+  return visionOfModel(MODELS, sel)
+}
+
+export function visionOfAlias(alias) {
+  return MODELS[alias]?.vision === true
+}
+
+// running 一律 steer（文字和附件），进当前轮下一步。idle 才 followup 开新轮。
+export function deliverMode(status, _opts) {
+  if (status !== 'running') return 'followup'
+  return 'steer'
+}
+
+export async function waitAgentStatus(agent, want, ms = 15_000, step = 50) {
+  const deadline = Date.now() + ms
+  while (Date.now() < deadline) {
+    if (agent?.status === want) return true
+    await new Promise((resolve) => setTimeout(resolve, step))
+  }
+  return agent?.status === want
+}
+
+// -m 覆盖：等这一轮真正跑起来再等它结束；超时取消，不把任务交回会话主模型。
+export async function restoreOverrideAfterTurn(agent, handle, prev, opts = {}) {
+  const startMs = opts.startMs ?? 15_000
+  const idleMs = opts.idleMs ?? 720_000
+  const restore = () => {
+    if (handle?._modelRef) handle._modelRef.current = prev
+  }
+  try {
+    if (agent?.status !== 'running') {
+      const started = await waitAgentStatus(agent, 'running', startMs)
+      if (!started) {
+        process.stderr.write('[dsh-feishu] -m override: agent never started, restore session model\n')
+        restore()
+        return
+      }
+    }
+    const idle = typeof agent?.whenIdle === 'function'
+      ? Promise.resolve(agent.whenIdle()).then(() => true).catch(() => true)
+      : Promise.resolve(true)
+    const timedOut = await Promise.race([
+      idle.then(() => false),
+      new Promise((resolve) => setTimeout(() => resolve(true), idleMs)),
+    ])
+    if (timedOut) {
+      process.stderr.write('[dsh-feishu] -m override timed out, cancel; will not hand off to session model\n')
+      try { agent?.cancel?.({ kind: 'user' }) } catch { /* ignore */ }
+      await waitAgentStatus(agent, 'idle', 5_000)
+    }
+  } catch (err) {
+    process.stderr.write(`[dsh-feishu] -m override restore: ${err}\n`)
+  } finally {
+    restore()
+  }
+}
 
 export function createBridge(ctx, options) {
   const { cwd, mapPath, primaryAppId } = options
   if (!primaryAppId) throw new Error('dsh-feishu: FEISHU_APP_ID is required for chat map keys')
-  const MODELS = loadModels()
-  const migrated = migrateMap(loadMap(mapPath), primaryAppId, MODELS)
+  const migrated = migrateMap(loadMap(mapPath), primaryAppId)
   const chats = migrated.map
   const historyPath = join(dirname(mapPath), 'feishu-history.json')
   const history = loadHistory(historyPath)
@@ -67,7 +145,7 @@ export function createBridge(ctx, options) {
   for (const [key, entry] of Object.entries(chats)) {
     const { appId, chatId } = parseKey(key)
     if (entry.model && MODELS[entry.model]) {
-      selections.set(key, selectionFromAlias(MODELS, entry.model))
+      selections.set(key, selectionOfAlias(MODELS, entry.model))
     }
     if (entry.sessionId && !history.items.some((item) => item.id === String(entry.sessionId))) {
       remember(appId, chatId, entry.sessionId)
@@ -99,7 +177,7 @@ export function createBridge(ctx, options) {
   }
 
   function persistUsedModel(appId, chatId, selected) {
-    const alias = aliasOf(MODELS, selected)
+    const alias = aliasOf(selected)
     if (alias === '?' || chats[keyOf(appId, chatId)]?.model === alias) return
     writeChat(appId, chatId, { model: alias })
   }
@@ -183,7 +261,8 @@ export function createBridge(ctx, options) {
         bind(appId, chatId, handle, selected)
         persistUsedModel(appId, chatId, selected)
         remember(appId, chatId, handle.agent.id)
-        process.stderr.write(`[dsh-feishu] resumed ${chatKey} -> ${handle.agent.id} model=${aliasOf(MODELS, selected)}\n`)
+        stripIfNeeded(handle, true, visionOf(selected))
+        process.stderr.write(`[dsh-feishu] resumed ${chatKey} -> ${handle.agent.id} model=${aliasOf(selected)}\n`)
         return handle
       } catch (err) {
         process.stderr.write(`[dsh-feishu] resume failed ${chatKey}: ${err}\n`)
@@ -203,9 +282,9 @@ export function createBridge(ctx, options) {
     handle._modelRef = box.ref
     await handle.agent.whenIdle()
     bind(appId, chatId, handle, selected)
-    writeChat(appId, chatId, { sessionId: handle.agent.id, model: aliasOf(MODELS, selected) === '?' ? undefined : aliasOf(MODELS, selected) })
+    writeChat(appId, chatId, { sessionId: handle.agent.id, model: aliasOf(selected) === '?' ? undefined : aliasOf(selected) })
     remember(appId, chatId, handle.agent.id)
-    process.stderr.write(`[dsh-feishu] created ${chatKey} -> ${handle.agent.id} model=${aliasOf(MODELS, selected)}\n`)
+    process.stderr.write(`[dsh-feishu] created ${chatKey} -> ${handle.agent.id} model=${aliasOf(selected)}\n`)
     return handle
   }
 
@@ -229,35 +308,62 @@ export function createBridge(ctx, options) {
     return routeOf(sessionId)?.chatId
   }
 
-  function userMessage(text) {
+  function userMessage(text, images) {
+    const content = [{ type: 'text', text: text || '(空消息)' }]
+    if (Array.isArray(images)) {
+      for (const image of images) {
+        if (image) content.push({ type: 'image', attachment: image })
+      }
+    }
     return Object.freeze({
       id: randomUUID(),
       role: 'user',
-      content: Object.freeze([{ type: 'text', text: text || '(空消息)' }]),
+      content: Object.freeze(content),
       source: Object.freeze({ kind: 'user' }),
     })
   }
 
-  async function deliver(appId, chatId, text, packs, modelAlias) {
+  function stripIfNeeded(handle, fromVision, toVision) {
+    if (!fromVision || toVision) return 0
+    const session = handle?.agent?.session
+    if (!session) return 0
+    const n = stripSessionImages(session)
+    if (n) process.stderr.write(`[dsh-feishu] stripped ${n} image surface(s) for text-only model\n`)
+    return n
+  }
+
+  async function deliver(appId, chatId, text, packs, modelAlias, images, opts = {}) {
     const handle = await ensure(appId, chatId)
     const agent = handle.agent
     if (packs?.omnicore) enableMcp(agent, 'omnicore')
     if (packs?.browser) enableMcp(agent, 'browser')
     // 单次模型覆盖：只影响这一轮回复，跑完恢复会话原选型，不写持久化
     let overridePrev
+    const sessionVision = visionOf(selectionOf(appId, chatId))
+    let activeVision = sessionVision
     if (modelAlias && MODELS[modelAlias] && handle._modelRef) {
       overridePrev = handle._modelRef.current
       handle._modelRef.current = { provider: MODELS[modelAlias].provider, model: MODELS[modelAlias].model }
+      activeVision = visionOfAlias(modelAlias)
+      stripIfNeeded(handle, sessionVision, activeVision)
     }
-    const msg = userMessage(text)
-    if (agent.status === 'running') agent.steer(msg)
-    else agent.followup(msg)
+    const session = agent.session
+    if (opts.stripHistoryImages) {
+      const n = stripSessionImages(session)
+      if (n) process.stderr.write(`[dsh-feishu] stripped ${n} history image surface(s) before new attachment\n`)
+    } else {
+      const n = stripMissingSessionImages(session)
+      if (n) process.stderr.write(`[dsh-feishu] stripped ${n} missing image surface(s)\n`)
+    }
+    const nativeImages = activeVision && Array.isArray(images) && images.length ? images : undefined
+    const msg = userMessage(text, nativeImages)
+    if (deliverMode(agent.status, opts) === 'followup') agent.followup(msg)
+    else agent.steer(msg)
     if (overridePrev !== undefined) {
-      await Promise.race([
-        Promise.resolve(agent.whenIdle?.()).catch(() => {}),
-        new Promise((resolve) => setTimeout(resolve, 300_000)),
-      ])
-      if (handle._modelRef) handle._modelRef.current = overridePrev
+      // 不等这一轮结束：cron --no-wait 必须立刻返回。超时取消，不把活交回会话主模型。
+      void restoreOverrideAfterTurn(agent, handle, overridePrev).catch((err) => {
+        process.stderr.write(`[dsh-feishu] -m override: ${err}\n`)
+      })
     }
   }
 
@@ -303,7 +409,7 @@ export function createBridge(ctx, options) {
       const commands = ctx.get('commands')
       if (!commands?.execute) return goalResult(false, 'Goal 命令服务不可用', null)
       try {
-        // dsh >= 0.1.1-rc.1 signature is execute(agent, line, images, signal); pass empty images
+        // dsh >= 0.1.1-rc.1 签名为 execute(agent, line, images, signal)，images 传空数组
         const exec = await commands.execute(handle.agent, trimmed, [], new AbortController().signal)
         if (!exec) return goalResult(true, formatGoalStatus(null), null)
         if (exec.result.kind === 'error') {
@@ -368,14 +474,16 @@ export function createBridge(ctx, options) {
     if (chats[chatKey]?.sessionId) writeChat(appId, chatId, { dropSession: true })
   }
 
-  async function listResumeItems(appId, chatId) {
+  async function listResumeItems(appId, chatId, page) {
     const current = chats[keyOf(appId, chatId)]?.sessionId
       || (live.get(keyOf(appId, chatId)) && String(live.get(keyOf(appId, chatId)).agent.id))
       || null
-    const query = ctx.get('sessionQuery')
-    const mine = history.items.slice(0, 8)
-    if (mine.length === 0) return { current, items: [] }
+    const paging = resumePaging(history.items.length, page)
+    if (paging.total === 0) return { current, items: [], ...paging }
 
+    const start = (paging.page - 1) * RESUME_PAGE_SIZE
+    const mine = history.items.slice(start, start + RESUME_PAGE_SIZE)
+    const query = ctx.get('sessionQuery')
     const ids = mine.map((item) => item.id)
     let titles = []
     if (query?.readTitleSnapshots) {
@@ -399,7 +507,7 @@ export function createBridge(ctx, options) {
       const held = holderOf(item.id)
       const bytes = sessionFileBytes(home, item.id)
       return {
-        n: i + 1,
+        n: start + i + 1,
         id: item.id,
         title: item.title || titleById.get(item.id) || item.id.slice(0, 12),
         when: formatWhen(item.updatedAt),
@@ -409,11 +517,11 @@ export function createBridge(ctx, options) {
         current: item.id === current,
       }
     })
-    return { current, items }
+    return { current, items, ...paging }
   }
 
-  async function listResumes(appId, chatId) {
-    const { items } = await listResumeItems(appId, chatId)
+  async function listResumes(appId, chatId, page) {
+    const { items, page: p, pages, total } = await listResumeItems(appId, chatId, page)
     if (items.length === 0) return '没有可恢复的会话。先聊一句，或 /clear 过的也会出现在这里。'
     const lines = items.map((item) => {
       const mark = item.current ? '*' : ' '
@@ -422,16 +530,17 @@ export function createBridge(ctx, options) {
       const size = item.size ? `  ${item.size}` : ''
       return `${mark}${item.n}. ${item.title}${from}${busy}  ${item.when}${size}`
     })
-    return `近期会话（多 bot 共用，* 当前）\n${lines.join('\n')}\n\n/resume 2 切到第 2 条。占用中的不能同时握。`
+    const more = pages > 1 ? `\n第 ${p}/${pages} 页 · 共 ${total} 条。点卡片翻页。` : ''
+    return `近期会话（两 bot 共用，* 当前）\n${lines.join('\n')}${more}\n\n点一条切过去。占用中的不能同时握。`
   }
 
   async function resumeAt(appId, chatId, token) {
     const raw = String(token || '').trim()
     if (!raw) return listResumes(appId, chatId)
     const n = Number.parseInt(raw, 10)
-    const mine = history.items.slice(0, 8)
+    const mine = history.items
     if (!Number.isInteger(n) || n < 1 || n > mine.length) {
-      return `序号无效。用 /resume 看列表，或 /resume 1–${mine.length || 0}`
+      return `序号无效。用 /resume 看列表。`
     }
     const target = mine[n - 1]
     const chatKey = keyOf(appId, chatId)
@@ -460,6 +569,7 @@ export function createBridge(ctx, options) {
       persistUsedModel(appId, chatId, selected)
       writeChat(appId, chatId, { sessionId: handle.agent.id })
       remember(appId, chatId, handle.agent.id, target.title)
+      stripIfNeeded(handle, true, visionOf(selected))
       return `已切到 ${n}. ${target.title || target.id.slice(0, 12)}`
     } catch (err) {
       process.stderr.write(`[dsh-feishu] resumeAt failed: ${err}\n`)
@@ -490,29 +600,53 @@ export function createBridge(ctx, options) {
     if (!key) {
       const cur = selectionOf(appId, chatId)
       const lines = Object.entries(MODELS).map(([k, v]) =>
-        `${k === aliasOf(MODELS, cur) ? '* ' : '  '}${v.label}`,
+        `${k === aliasOf(cur) ? '* ' : '  '}${v.label}`,
       )
-      return `当前 ${aliasOf(MODELS, cur)} (${cur.model})\n${lines.join('\n')}`
+      return `当前 ${aliasOf(cur)} (${cur.model})\n${lines.join('\n')}`
     }
     const next = MODELS[key]
     if (!next) {
       return `未知模型 \`${token}\`。可用：${Object.keys(MODELS).join(' / ')}`
     }
 
+    const prev = selectionOf(appId, chatId)
     const selected = { provider: next.provider, model: next.model }
+    const handle = live.get(chatKey)
+    const stripped = stripIfNeeded(handle, visionOf(prev), next.vision === true)
     selections.set(chatKey, selected)
     writeChat(appId, chatId, { model: key })
-
-    const handle = live.get(chatKey)
     if (handle?._modelRef) handle._modelRef.current = selected
-    return `已切换到 ${next.label}，下一轮生效`
+    const extra = stripped ? `。已把 ${stripped} 处历史图换成路径` : ''
+    return `已切换到 ${next.label}，下一轮生效${extra}`
+  }
+
+  function modelGroups(appId, chatId) {
+    return groupsOf(MODELS, aliasOf(selectionOf(appId, chatId)))
+  }
+
+  async function sessionTitleOf(sessionId, session) {
+    if (!sessionId) return ''
+    const remembered = history.items.find((item) => item.id === String(sessionId))?.title
+    if (remembered) return remembered
+    const query = ctx.get('sessionQuery')
+    if (query?.readTitle) {
+      try {
+        const snap = await query.readTitle(sessionId)
+        const title = snap?.title || snap?.title?.title
+        if (typeof title === 'string' && title.trim()) return title.trim()
+      } catch (err) {
+        process.stderr.write(`[dsh-feishu] status title: ${err}\n`)
+      }
+    }
+    const liveTitle = session?.header?.title || session?.title
+    return typeof liveTitle === 'string' ? liveTitle : ''
   }
 
   async function status(appId, chatId) {
     const chatKey = keyOf(appId, chatId)
     const handle = live.get(chatKey)
     const selected = selectionOf(appId, chatId)
-    const alias = aliasOf(MODELS, selected)
+    const alias = aliasOf(selected)
     const sessionId = handle
       ? String(handle.agent.id)
       : (chats[chatKey]?.sessionId || null)
@@ -528,7 +662,15 @@ export function createBridge(ctx, options) {
       if (typeof persistence?.inspect === 'function') {
         try {
           const inspection = await persistence.inspect(sessionId)
-          if (inspection?.events) session = { events: inspection.events }
+          if (inspection?.events) {
+            const events = inspection.events
+            session = {
+              events,
+              seq: Array.isArray(events) ? events.length : 0,
+              eventAt: (i) => events[i],
+              snapshotEvents: () => events,
+            }
+          }
         } catch (err) {
           process.stderr.write(`[dsh-feishu] status inspect: ${err}\n`)
         }
@@ -537,16 +679,21 @@ export function createBridge(ctx, options) {
     const context = measureContext({
       meter: ctx.get('tokenMeter'),
       session,
-      window: modelWindow(MODELS, selected),
+      window: windowOf(selected),
     })
-    return formatStatus({
+    const payload = {
       alias,
       model: selected?.model,
+      title: await sessionTitleOf(sessionId, session),
       hasSession: Boolean(sessionId),
       context,
       agentStatus: handle?.agent?.status || null,
       host: collectHost(),
-    })
+    }
+    return {
+      text: formatStatus(payload),
+      card: statusCard(payload),
+    }
   }
 
   async function compact(appId, chatId, hint) {
@@ -618,33 +765,24 @@ export function createBridge(ctx, options) {
   }
 
   return {
-    deliver, stop, clear, setModel, status, compact, runGoal, goalOf,
+    deliver, stop, clear, setModel, modelGroups, status, compact, runGoal, goalOf,
     listResumeItems, listResumes, resumeAt, rename, waitIdle,
-    chatOf, routeOf, selectionOf, selectionOfKey,
-    windowOf: (sel) => modelWindow(MODELS, sel),
-    disposeAll, warmup,
+    chatOf, routeOf, selectionOf, selectionOfKey, windowOf, visionOf, disposeAll, warmup,
   }
 }
 
+// bot 显示名来自 DSH_FEISHU_BOT_LABELS，形如 `cli_xxx=Alice,cli_yyy=Bob`。
+// 没配就退化成 App ID 前 10 位，源码里不写死任何 App ID。
 function shortApp(appId) {
-  const labels = parseBotLabels()
-  if (labels[appId]) return labels[appId]
   if (appId === 'cli') return 'cli'
-  const id = String(appId || '')
-  return id.length <= 10 ? id : id.slice(0, 10)
-}
-
-function parseBotLabels() {
-  const raw = process.env.DSH_FEISHU_BOT_LABELS || ''
-  const out = {}
+  const raw = String(process.env.DSH_FEISHU_BOT_LABELS || '')
   for (const item of raw.split(',')) {
     const i = item.indexOf('=')
     if (i < 1) continue
-    const id = item.slice(0, i).trim()
-    const label = item.slice(i + 1).trim()
-    if (id && label) out[id] = label
+    if (item.slice(0, i).trim() === String(appId)) return item.slice(i + 1).trim()
   }
-  return out
+  const id = String(appId || '')
+  return id.length <= 10 ? id : id.slice(0, 10)
 }
 
 function formatWhen(ts) {
@@ -665,11 +803,11 @@ function loadHistory(path) {
   }
 }
 
-function normalizeEntry(value, models) {
+function normalizeEntry(value) {
   if (typeof value === 'string' && value) return { sessionId: value }
   if (!value || typeof value !== 'object') return null
   const sessionId = typeof value.sessionId === 'string' && value.sessionId ? value.sessionId : undefined
-  const model = typeof value.model === 'string' && models[value.model] ? value.model : undefined
+  const model = typeof value.model === 'string' && MODELS[value.model] ? value.model : undefined
   if (!sessionId && !model) return null
   return {
     ...sessionId ? { sessionId } : {},
@@ -685,17 +823,17 @@ function loadMap(path) {
   }
 }
 
-function migrateMap(raw, appId, models) {
+function migrateMap(raw, appId) {
   const out = {}
   let changed = false
   for (const [k, v] of Object.entries(raw || {})) {
     const key = k.includes('::') ? k : `${appId}::${k}`
     if (!k.includes('::') || typeof v === 'string') changed = true
-    const entry = normalizeEntry(v, models)
+    const entry = normalizeEntry(v)
     if (entry) out[key] = entry
   }
   if (changed) {
-    process.stderr.write('[dsh-feishu] migrated chat map to (appId, chat_id, model)\n')
+    process.stderr.write(`[dsh-feishu] migrated chat map to (appId, chat_id, model)\n`)
   }
   return { map: out, changed }
 }

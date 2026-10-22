@@ -20,12 +20,24 @@ function codePointLength(text) {
   return Array.from(text).length
 }
 
+function listEvents(session) {
+  if (typeof session?.snapshotEvents === 'function') {
+    const snap = session.snapshotEvents()
+    return Array.isArray(snap) ? snap : []
+  }
+  const events = session?.events
+  if (!events) return []
+  return Array.isArray(events) ? events : Object.values(events)
+}
+
+function eventOf(session, seq) {
+  if (typeof session?.eventAt === 'function') return session.eventAt(seq)
+  return session?.events?.[seq] || null
+}
+
 function callNames(session) {
   const map = new Map()
-  const events = session?.events
-  if (!events) return map
-  const list = Array.isArray(events) ? events : Object.values(events)
-  for (const event of list) {
+  for (const event of listEvents(session)) {
     if (event?.type !== 'tool/call') continue
     const id = event.data?.callId
     const name = event.data?.name
@@ -101,11 +113,9 @@ function pruneBlocks(blocks) {
 }
 
 function seenViews(session, resultSeq) {
-  const events = session?.events
-  if (!events || typeof resultSeq !== 'number') return 0
-  const list = Array.isArray(events) ? events : Object.values(events)
+  if (typeof resultSeq !== 'number') return 0
   let n = 0
-  for (const event of list) {
+  for (const event of listEvents(session)) {
     if (event?.type !== 'step/start') continue
     const seq = event.seq
     if (typeof seq === 'number' && seq > resultSeq) n += 1
@@ -117,7 +127,7 @@ function collectFrozenIds(session) {
   const frozen = new Set()
   if (!session?.surface?.nodes) return frozen
   for (const seq of session.surface.nodes) {
-    const event = session.events?.[seq]
+    const event = eventOf(session, seq)
     if (event?.type !== 'tool/result') continue
     frozen.add(resultId(resultBlock(event), event, seq))
   }
@@ -142,7 +152,7 @@ function applyPruneGate(session, tokens, state, pruneFn) {
   const cut = typeof pruneFn === 'function' ? pruneFn : pruneBlocks
   let n = 0
   for (const seq of [...session.surface.nodes]) {
-    const event = session.events[seq]
+    const event = eventOf(session, seq)
     if (event?.type !== 'tool/result') continue
     const block = resultBlock(event)
     if (!block || block.isError) continue
@@ -163,7 +173,7 @@ function applyPruneGate(session, tokens, state, pruneFn) {
         content: [{ ...block, content }],
       },
     }, {
-      surfaceOp: { op: 'replace', start: seq, end: seq },
+      surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq },
       sourceEventSeqs: [seq],
     })
     n += 1

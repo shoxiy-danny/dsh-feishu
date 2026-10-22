@@ -2,45 +2,38 @@ import { randomUUID } from 'node:crypto'
 import { askCard, lockedCard, waitCard } from './cards.js'
 
 export function attachAsk(ctx, { routeOf, store }) {
-  const uq = ctx.get('userQuestions')
-  if (!uq?.registerProvider) {
-    process.stderr.write('[dsh-feishu] userQuestions missing; ask_user_question not wired\n')
-    return
-  }
-
-  uq.registerProvider({
-    async ask(request) {
-      const route = request.agent ? routeOf(request.agent.id) : null
-      if (!route?.lark || !route.chatId) {
-        throw new Error('当前没有飞书窗口，无法提问')
+  ctx.on('user-questions/request', async (request) => {
+    const route = request.agent ? routeOf(request.agent.id) : null
+    if (!route?.lark || !route.chatId) {
+      throw new Error('当前没有飞书窗口，无法提问')
+    }
+    const answers = []
+    for (const question of request.questions || []) {
+      if (request.signal?.aborted) {
+        throw Object.assign(new Error('ask_user_question was aborted before the user answered'), { code: 'ASK_ABORTED' })
       }
-      const answers = []
-      for (const question of request.questions || []) {
-        if (request.signal?.aborted) {
-          throw Object.assign(new Error('ask_user_question was aborted before the user answered'), { code: 'ASK_ABORTED' })
-        }
-        answers.push(await askOne({
-          question,
-          route,
-          store,
-          signal: request.signal,
-        }))
-      }
-      return { answers }
-    },
+      answers.push(await askOne({
+        question,
+        route,
+        store,
+        signal: request.signal,
+      }))
+    }
+    return { answers }
   })
   process.stderr.write('[dsh-feishu] ask_user_question -> Feishu cards\n')
 }
 
 async function askOne({ question, route, store, signal }) {
   const id = randomUUID()
-  const options = question.multiSelect ? [] : (question.options || [])
+  const multiSelect = Boolean(question.multiSelect || question.multi_select)
   const card = askCard({
     id,
     header: question.header,
     question: question.question,
     detail: question.detail,
-    options,
+    options: question.options || [],
+    multiSelect,
   })
   const messageId = await route.lark.sendCard(route.chatId, card)
   const rec = {
@@ -51,6 +44,7 @@ async function askOne({ question, route, store, signal }) {
     messageId,
     questionId: question.id,
     lark: route.lark,
+    options: (question.options || []).map((opt) => opt.label),
   }
 
   const onAbort = () => store.settle(id, { abort: true })

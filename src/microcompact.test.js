@@ -24,23 +24,25 @@ function fatText(n) {
 }
 
 function makeSession() {
-  const events = []
+  const log = []
   const nodes = []
   const session = {
-    events,
+    get seq() { return log.length },
+    eventAt(i) { return log[i] ?? null },
+    snapshotEvents() { return log.slice() },
     surface: { nodes },
     append(type, data, opts) {
       const event = {
         type,
-        seq: events.length,
+        seq: log.length,
         data,
         ...(opts || {}),
       }
-      events.push(event)
+      log.push(event)
       if (type === 'tool/result') {
         const op = opts?.surfaceOp
         if (op?.op === 'replace') {
-          const i = nodes.indexOf(op.start)
+          const i = nodes.indexOf(op.startSeq ?? op.start)
           if (i >= 0) nodes[i] = event.seq
         } else {
           nodes.push(event.seq)
@@ -53,13 +55,7 @@ function makeSession() {
 }
 
 function addCall(session, { callId, name }) {
-  const event = {
-    type: 'tool/call',
-    seq: session.events.length,
-    data: { callId, name },
-  }
-  session.events.push(event)
-  return event
+  return session.append('tool/call', { callId, name })
 }
 
 function addResult(session, { callId, text, isError = false }) {
@@ -76,13 +72,7 @@ function addResult(session, { callId, text, isError = false }) {
 }
 
 function addStepStart(session, turn, step) {
-  const event = {
-    type: 'step/start',
-    seq: session.events.length,
-    data: { turn, step },
-  }
-  session.events.push(event)
-  return event
+  return session.append('step/start', { turn, step })
 }
 
 test('pruneBlocks keeps official head and tail', () => {
@@ -125,7 +115,7 @@ test('below 100K does not prune', () => {
   const got = applyPruneGate(session, GATE_TOKENS - 1, state)
   assert.deepEqual(got, { opened: false, pruned: 0 })
   assert.equal(session.surface.nodes[0], result.seq)
-  assert.equal(alreadyPruned(session.events[result.seq].data.message.content[0]), false)
+  assert.equal(alreadyPruned(session.eventAt(result.seq).data.message.content[0]), false)
 })
 
 test('crossing 100K freezes current results and does not prune this beat', () => {
@@ -148,8 +138,8 @@ test('crossing 100K freezes current results and does not prune this beat', () =>
   const second = applyPruneGate(session, GATE_TOKENS + 10, state)
   assert.equal(second.opened, true)
   assert.equal(second.pruned, 1)
-  const oldBlock = session.events[session.surface.nodes[0]].data.message.content[0]
-  const newBlock = session.events[session.surface.nodes[1]].data.message.content[0]
+  const oldBlock = session.eventAt(session.surface.nodes[0]).data.message.content[0]
+  const newBlock = session.eventAt(session.surface.nodes[1]).data.message.content[0]
   assert.equal(alreadyPruned(oldBlock), false)
   assert.equal(alreadyPruned(newBlock), true)
 })
@@ -172,7 +162,7 @@ test('keep 3: prune only on the fourth send', () => {
   const last = applyPruneGate(session, GATE_TOKENS + 1, state)
   assert.equal(last.pruned, 1)
   assert.notEqual(session.surface.nodes[0], result.seq)
-  assert.equal(alreadyPruned(session.events[session.surface.nodes[0]].data.message.content[0]), true)
+  assert.equal(alreadyPruned(session.eventAt(session.surface.nodes[0]).data.message.content[0]), true)
 })
 
 test('short results and skill and errors stay', () => {

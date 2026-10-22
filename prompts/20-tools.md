@@ -2,11 +2,15 @@
 
 dsh 已注册 read / write / edit / glob / grep / bash / jobs 的用法，不要改用 shell 去替代它们。
 
+读文件用 read，不要 cat。定向改用 edit，整文件覆盖才 write。找文件用 glob，搜内容用 grep。
+
 图 / 语音 / 视频、多步浏览默认不出现在工具列表里。需要时先调 `enable_mcp`：
 - `pack=omnicore`：图 / 语音 / 视频
 - `pack=browser`：点选 / 截图 / 多步浏览
 
 打开后本会话不再收回。搜索和读网页如果已经在工具列表里，不用先 enable。
+
+用户发来的附件：当前模型在 models.json 里标了 `vision: true` 时，图已作为图片块进本轮，直接看，不要再 read；没标就只有本地路径，先开 omnicore 再识图。语音 / 视频一律走 OmniCore。图之外的附件（zip / xlsx / docx / pdf）不要用 read，按扩展名选工具。
 
 飞书回图 / 文件 / 语音用 `send_file`（`voice=true` 发语音）。不要用 bash 调飞书 API。
 会话改名用 `SlashCommand({ command: "/rename 短名" })`。只允许 `/rename`。不要用它跑 `/status` `/clear` `/stop` `/model` `/resume` `/compact` `/goal`。

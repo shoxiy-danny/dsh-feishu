@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 
+// 记忆根：DSH_FEISHU_MEMORY_DIR 指到含 MEMORY.md 的目录。没设就不加载记忆段。
 export function memoryRoot() {
   const dir = process.env.DSH_FEISHU_MEMORY_DIR
   if (!dir) return null
@@ -33,14 +34,14 @@ export function memorySectionText() {
   if (!ok) {
     if (!root && !process.env.DSH_FEISHU_MEMORY_DIR) return ''
     return [
-      'Memory index was not loaded.',
-      'Set DSH_FEISHU_MEMORY_DIR to a folder that contains MEMORY.md.',
+      '记忆索引未加载。',
+      '把 DSH_FEISHU_MEMORY_DIR 指向一个含 MEMORY.md 的目录。',
     ].join('\n')
   }
   return [
-    `Memory root: ${root}`,
-    'MEMORY.md is an index of pointers. Do not inline the whole file every turn.',
-    'To use a note: Read the index, then Read the file it points to.',
-    'To write a note: one file + frontmatter, then add one line to MEMORY.md.',
+    `记忆根：${root}`,
+    'MEMORY.md 是指针目录，不要把整份塞进稳定前缀。',
+    '用某条：先 Read 索引，再 Read 它指向的分文件。',
+    '写记忆：单文件 + frontmatter，再更新 MEMORY.md 一行。',
   ].join('\n')
 }

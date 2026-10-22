@@ -124,7 +124,7 @@ export function approvalCard({ id, kind, command }) {
   }
 }
 
-export function askCard({ id, header, question, detail, options }) {
+export function askCard({ id, header, question, detail, options, multiSelect }) {
   const token = String(id || '')
   const opts = (options || []).map((opt, i) => ({
     n: i + 1,
@@ -136,11 +136,14 @@ export function askCard({ id, header, question, detail, options }) {
     { tag: 'markdown', content: `**${question}**` },
   ]
   if (detail) elements.push({ tag: 'markdown', content: String(detail) })
-  if (opts.length && opts.some((o) => o.description)) {
+  if (!multiSelect && opts.length && opts.some((o) => o.description)) {
     const menu = opts
       .map((o) => `**${o.n}. ${o.label}**${o.description ? `　<font color='grey'>${o.description}</font>` : ''}`)
       .join('\n')
     elements.push({ tag: 'markdown', content: menu })
+  }
+  if (multiSelect && opts.length) {
+    elements.push(multiSelectForm(token, opts))
   }
   elements.push(inputForm({
     formName: `ask_${safeId(token)}`,
@@ -154,7 +157,12 @@ export function askCard({ id, header, question, detail, options }) {
     submit: '提交回答',
     required: true,
   }))
-  if (opts.length) {
+  if (multiSelect && opts.length) {
+    elements.push({
+      tag: 'markdown',
+      content: `<font color='grey'>勾选后点「提交选择」；也可填框或直接打字，先到的算数。</font>`,
+    })
+  } else if (opts.length) {
     elements.push({ tag: 'hr' })
     for (let i = 0; i < opts.length; i += 2) {
       elements.push(askButtonRow(token, opts.slice(i, i + 2)))
@@ -178,6 +186,44 @@ export function askCard({ id, header, question, detail, options }) {
     },
     body: { elements },
   }
+}
+
+function multiSelectForm(token, opts) {
+  const checkers = opts.map((o, i) => ({
+    tag: 'checker',
+    element_id: eid('ck', token, i),
+    name: `pick_${i}`,
+    checked: false,
+    overall_checkable: true,
+    text: checkerText(o),
+  }))
+  return {
+    tag: 'form',
+    element_id: eid('mqf', token),
+    name: `askm_${safeId(token)}`,
+    elements: [
+      ...checkers,
+      {
+        tag: 'button',
+        element_id: eid('mqb', token),
+        type: 'primary',
+        name: 'submit_picks',
+        form_action_type: 'submit',
+        text: { tag: 'plain_text', content: '提交选择' },
+        behaviors: [{ type: 'callback', value: { kind: 'ask', token, op: 'multi' } }],
+      },
+    ],
+  }
+}
+
+function checkerText(o) {
+  if (o.description) {
+    return {
+      tag: 'lark_md',
+      content: `**${o.label}**　<font color='grey'>${o.description}</font>`,
+    }
+  }
+  return { tag: 'plain_text', content: `${o.n} · ${o.label}`.slice(0, 40) }
 }
 
 function askButtonRow(token, opts) {
@@ -214,10 +260,12 @@ export function lockedCard({ title, template, body }) {
   }
 }
 
-export function resumeCard({ id, items }) {
+export function resumeCard({ id, items, page, pages, total }) {
   const token = String(id || '')
+  const count = total ?? (items || []).length
+  const paging = resumeCardPaging(count, page, pages)
   const elements = [
-    { tag: 'markdown', content: `<font color='grey'>点一条切过去；占用中的不能同时握。也可直接发 \`/resume 2\`。</font>` },
+    { tag: 'markdown', content: `<font color='grey'>点一条切过去；占用中的不能同时握。</font>` },
   ]
   for (const [i, item] of (items || []).entries()) {
     const n = Number(item.n || i + 1)
@@ -237,6 +285,14 @@ export function resumeCard({ id, items }) {
     })
     if (hint) elements.push({ tag: 'markdown', content: hint.trim() })
   }
+  if (paging.pages > 1) {
+    elements.push({ tag: 'hr' })
+    elements.push({
+      tag: 'markdown',
+      content: `<font color='grey'>第 ${paging.page}/${paging.pages} 页 · 共 ${paging.total} 条</font>`,
+    })
+    elements.push(resumePagerRow(token, paging))
+  }
   elements.push({
     tag: 'button',
     element_id: eid('rs', token),
@@ -255,7 +311,49 @@ export function resumeCard({ id, items }) {
   }
 }
 
-const MODEL_TIER_COLORS = { pro: 'blue', flash: 'green' }
+function resumeCardPaging(total, page, pages) {
+  const count = Math.max(0, Number(total) || 0)
+  if (count === 0) return { page: 1, pages: 1, total: 0 }
+  const maxPages = Math.max(1, Number(pages) || Math.ceil(count / 8) || 1)
+  const raw = Number.parseInt(page, 10)
+  const p = Number.isInteger(raw) ? Math.min(maxPages, Math.max(1, raw)) : 1
+  return { page: p, pages: maxPages, total: count }
+}
+
+function resumePagerRow(token, paging) {
+  const prevOff = paging.page <= 1
+  const nextOff = paging.page >= paging.pages
+  return {
+    tag: 'column_set',
+    flex_mode: 'bisect',
+    columns: [
+      resumePagerCol(token, 'rp', '上一页', prevOff, prevOff ? null : paging.page - 1),
+      resumePagerCol(token, 'rn', '下一页', nextOff, nextOff ? null : paging.page + 1),
+    ],
+  }
+}
+
+function resumePagerCol(token, prefix, label, disabled, page) {
+  const button = {
+    tag: 'button',
+    element_id: eid(prefix, token),
+    type: 'default',
+    disabled,
+    text: { tag: 'plain_text', content: label },
+  }
+  if (!disabled && page != null) {
+    button.behaviors = [{ type: 'callback', value: { kind: 'resume', token, op: 'page', page: String(page) } }]
+  }
+  return {
+    tag: 'column',
+    width: 'weighted',
+    weight: 1,
+    vertical_align: 'top',
+    elements: [button],
+  }
+}
+
+const MODEL_TIER_COLORS = { pro: 'blue', flash: 'green', cb: 'orange' }
 
 export function modelCard({ id, current, groups }) {
   const token = String(id || '')
@@ -431,6 +529,39 @@ export function formField(action, name) {
   }
   if (typeof action?.inputValue === 'string') return action.inputValue.trim()
   return ''
+}
+
+export function formList(action, name) {
+  const raw = action?.formValue?.[name]
+  if (Array.isArray(raw)) {
+    return raw.map((item) => {
+      if (typeof item === 'string') return item.trim()
+      if (item && typeof item === 'object') {
+        if (typeof item.value === 'string') return item.value.trim()
+        if (typeof item.input_value === 'string') return item.input_value.trim()
+      }
+      return ''
+    }).filter(Boolean)
+  }
+  if (typeof raw === 'string' && raw.trim()) return [raw.trim()]
+  return []
+}
+
+export function checkedPicks(action, labels) {
+  const form = action?.formValue || {}
+  const out = []
+  for (let i = 0; i < (labels || []).length; i++) {
+    if (isChecked(form[`pick_${i}`])) out.push(labels[i])
+  }
+  return out
+}
+
+function isChecked(raw) {
+  if (raw === true || raw === 1 || raw === 'true' || raw === '1') return true
+  if (raw && typeof raw === 'object') {
+    if (raw.checked === true || raw.value === true) return true
+  }
+  return false
 }
 
 export function parseCardAction(data) {

@@ -75,7 +75,7 @@ Agent 自己多轮推进。连续卡住会标 blocked。进程重启后 **不会
 | 文件 | 谁读 | 干什么 |
 |------|------|--------|
 | profile 的 `cordis.patch.yml` 里 `llm-pi-ai.providers` | dsh | 这条路由怎么连：协议、地址、密钥环境变量、模型目录 |
-| `DSH_FEISHU_MODELS` 指向的 `models.json` | 本插件 | `/model` 列出什么、进度头显示什么。**整表替换**默认的 `dsf`，要留官方那条就自己抄回去 |
+| `DSH_FEISHU_MODELS` 指向的 `models.json` | 本插件 | `/model` 列出什么、进度头显示什么。**整表替换**默认的 `dsf`，要留官方那条就自己抄回去。每项可加 `tier`（`pro` / `flash` / `cb` / `other`，决定 `/model` 卡片分组）、`short`（卡片上的短名）、`vision`（是否原生吃图） |
 
 两处的 `provider` + `model` 必须对上：json 的 `provider` = yaml 路由键；json 的 `model` = 该路由 `models[].id`。
 
@@ -178,11 +178,25 @@ yaml 的 `providers` 字典，**键就是路由名**。
 
 ## 多 bot
 
-同一 `dsh --profile feishu` 可以挂 2～3 个飞书应用。历史共用，会话分开。`/resume` 里被另一个窗口握住的会标「占用」。
+同一 `dsh --profile feishu` 可以挂 2～4 个飞书应用（`FEISHU_APP_ID` … `FEISHU_APP_ID_4`）。历史共用，会话分开。`/resume` 里被另一个窗口握住的会标「占用」。
+
+卡片和 `/usage` 里的 bot 名不写死在源码里，走 `DSH_FEISHU_BOT_LABELS`：
+
+```sh
+DSH_FEISHU_BOT_LABELS='cli_aaa=Alice,cli_bbb=Bob'
+```
+
+没配就显示 App ID 前 10 位。
 
 ## 图 / 语音 / 文件
 
-入站附件落到 `DSH_FEISHU_INBOX/inbox/`，路径写给模型。**不**把图片塞进 session image block——不少模型会把后面的纯文字也打挂。
+入站附件落到 `DSH_FEISHU_INBOX/inbox/`，保留原文件名，路径写给模型。
+
+图片只有在当前模型于 `models.json` 里标了 `vision: true` 时才作为 image block 进本轮；没标仍走「路径 + OmniCore 识图」。这样不吃图的模型不会因为图片块把后面的纯文字也打挂。
+
+切到不吃图的模型、或收新附件之前，会话里已有的图片块会就地换成一行路径文字；对象在磁盘上已经没了的，同样降级成路径文字，不让整轮失败。
+
+富文本（post）消息里的图片和附件文件都会解析出来。
 
 回图、回文件、回语音走工具 `send_file`。音频加 `voice=true` 会转 opus 再发成飞书语音（本机要有 ffmpeg）。
 
@@ -230,7 +244,11 @@ DSH_FEISHU_DROP_TOOLS=mcp__browse__get_html
 
 ## 高爆径
 
-默认拦：未点名/大范围 `rm`、`find -delete`、破坏性 git、删库、磁盘擦除、杀 dsh 进程。飞书出橙卡，点「允许这一次」才跑。打字同意不算批准。关：`DSH_FEISHU_GUARD=0`。
+默认拦：未点名/大范围 `rm`、`find -delete`、破坏性 git、删库、磁盘擦除、杀 dsh 进程（含 `pkill -f dsh-<名字>` 这类 profile 常驻进程）。飞书出橙卡，点「允许这一次」才跑。打字同意不算批准。关：`DSH_FEISHU_GUARD=0`。
+
+`rm` 目标里带未展开的 shell 变量（`$TMP_FILE`、`${VAR}`、`$(mktemp)`、反引号）时，值静态看不到，不当字面路径判，所以不会误报。`~` / `$HOME` 前缀仍按原规则拦。
+
+重启自己的脚本想让重启后的回执知道往哪发，设 `DSH_FEISHU_RESTART_SCRIPT=/绝对路径/restart.sh`：模型 bash 调这个脚本时若没带 `appId::chatId`，插件自动补当前窗口作为最后一参。
 
 提问走 `ask_user_question`：有选项出蓝卡，选项两列一排带序号、说明是灰字菜单，卡内有填空「提交回答」（默认一行），也可以直接打字。先到的算数。开放平台须订回调 `card.action.trigger`。
 

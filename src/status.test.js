@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { formatBytes, formatStatus, formatTokensK, measureContext, parseDf, parseMeminfo, sessionFileBytes } from './status.js'
+import { formatBytes, formatStatus, formatTokensK, measureContext, parseDf, parseMeminfo, sessionFileBytes, statusCard } from './status.js'
 
 test('formatTokensK', () => {
   assert.equal(formatTokensK(0), '0K')
@@ -73,8 +73,8 @@ test('measureContext percent and missing session', () => {
 
 test('formatStatus no session', () => {
   const text = formatStatus({
-    alias: 'any',
-    model: 'some-pro-model',
+    alias: 'grk',
+    model: 'grok-4.6',
     hasSession: false,
     context: null,
     host: {
@@ -84,7 +84,8 @@ test('formatStatus no session', () => {
       cpu: { n: 8, l1: 1.23, l5: 0.8, l15: 0.5, pct: 15 },
     },
   })
-  assert.match(text, /模型  any = some-pro-model/)
+  assert.match(text, /^无会话\n/)
+  assert.match(text, /模型  grk = grok-4\.6/)
   assert.match(text, /上下文  无会话/)
   assert.doesNotMatch(text, /主机/)
   assert.match(text, /内存  16G \/ 32G  已用 50%/)
@@ -94,9 +95,10 @@ test('formatStatus no session', () => {
 
 test('formatStatus with context', () => {
   const text = formatStatus({
-    alias: 'lit',
-    model: 'some-flash-model',
+    alias: 'stf',
+    model: 'step-3.7-flash',
     hasSession: true,
+    title: '改卡片',
     context: { pct: 12, total: 30720, window: 256000 },
     agentStatus: 'idle',
     host: {
@@ -106,7 +108,61 @@ test('formatStatus with context', () => {
       cpu: { n: 4, l1: 0, l5: 0, l15: 0, pct: 0 },
     },
   })
+  assert.match(text, /^改卡片\n/)
   assert.match(text, /上下文  12%  ·  31K \/ 256K/)
   assert.match(text, /状态  idle/)
   assert.match(text, /内存  不可读/)
+})
+
+test('statusCard no buttons, tiles for session and host', () => {
+  const card = statusCard({
+    alias: 'grk',
+    model: 'grok-4.6',
+    title: '改卡片',
+    hasSession: true,
+    context: { pct: 12, total: 30720, window: 256000 },
+    agentStatus: 'idle',
+    host: {
+      hostname: 'box',
+      mem: { total: 32 * 1024 ** 3, used: 16 * 1024 ** 3 },
+      disk: { total: 100 * 1024 ** 3, used: 40 * 1024 ** 3 },
+      cpu: { n: 8, l1: 1.23, l5: 0.8, l15: 0.5, pct: 15 },
+    },
+  })
+  assert.equal(card.schema, '2.0')
+  assert.equal(card.header.title.content, '改卡片')
+  assert.equal(card.header.subtitle.content, 'box')
+  assert.equal(card.header.template, 'turquoise')
+  assert.equal(card.header.text_tag_list[0].text.content, '空闲')
+  const dump = JSON.stringify(card)
+  assert.doesNotMatch(dump, /"tag":"button"/)
+  assert.doesNotMatch(dump, /"tag":"form"/)
+  assert.doesNotMatch(dump, /"elements":\[\{"tag":"column"/)
+  assert.doesNotMatch(dump, /"label":"状态"/)
+  assert.match(dump, /grk/)
+  assert.match(dump, /grok-4\.6/)
+  assert.match(dump, /12%/)
+  assert.match(dump, /31K \/ 256K/)
+  assert.match(dump, /50%/)
+  assert.match(dump, /16G \/ 32G/)
+  assert.match(dump, /8 核/)
+})
+
+test('statusCard hot header when context is high', () => {
+  const card = statusCard({
+    alias: 'stf',
+    model: 'step-3.7-flash',
+    hasSession: true,
+    context: { pct: 92, total: 235000, window: 256000 },
+    agentStatus: 'running',
+    host: {
+      hostname: 'box',
+      mem: { total: 32 * 1024 ** 3, used: 8 * 1024 ** 3 },
+      disk: { total: 100 * 1024 ** 3, used: 20 * 1024 ** 3 },
+      cpu: { n: 4, pct: 10 },
+    },
+  })
+  assert.equal(card.header.template, 'blue')
+  assert.equal(card.header.text_tag_list[0].text.content, '运行中')
+  assert.match(JSON.stringify(card), /92%/)
 })
