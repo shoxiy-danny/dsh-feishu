@@ -2,6 +2,8 @@
 
 给已经在用这个插件的机器。第一次装看 README 的「安装」，不用看这篇。
 
+0.2.0 → 0.3.0 的逐步命令（给 Agent）见 [upgrade-0.3.0-agent.md](upgrade-0.3.0-agent.md)。变化说明（给人）见 [whats-new-0.3.0.md](whats-new-0.3.0.md)。
+
 装法由 `dsh plugin add` 时写的 spec 决定，升级方式也跟着变。先确认自己是哪一种。
 
 ## 0. 先看现在装的是什么
