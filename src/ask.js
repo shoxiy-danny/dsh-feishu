@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { askCard, lockedCard, waitCard } from './cards.js'
+import { askCard, armWaitBuzz, lockedCard, waitCard } from './cards.js'
 
-export function attachAsk(ctx, { routeOf, store }) {
+export function attachAsk(ctx, { routeOf, store, senderOf }) {
   ctx.on('user-questions/request', async (request) => {
     const route = request.agent ? routeOf(request.agent.id) : null
     if (!route?.lark || !route.chatId) {
@@ -17,6 +17,7 @@ export function attachAsk(ctx, { routeOf, store }) {
         route,
         store,
         signal: request.signal,
+        openId: senderOf?.(route.chatKey) || '',
       }))
     }
     return { answers }
@@ -24,7 +25,7 @@ export function attachAsk(ctx, { routeOf, store }) {
   process.stderr.write('[dsh-feishu] ask_user_question -> Feishu cards\n')
 }
 
-async function askOne({ question, route, store, signal }) {
+async function askOne({ question, route, store, signal, openId }) {
   const id = randomUUID()
   const multiSelect = Boolean(question.multiSelect || question.multi_select)
   const card = askCard({
@@ -50,9 +51,16 @@ async function askOne({ question, route, store, signal }) {
   const onAbort = () => store.settle(id, { abort: true })
   signal?.addEventListener('abort', onAbort, { once: true })
   let result
+  const stopBuzz = armWaitBuzz({
+    store,
+    rec,
+    openId,
+    text: `还在等你回答：${String(question.question || '').slice(0, 40)}`,
+  })
   try {
     result = await waitCard(store, rec)
   } finally {
+    stopBuzz()
     signal?.removeEventListener('abort', onAbort)
   }
 

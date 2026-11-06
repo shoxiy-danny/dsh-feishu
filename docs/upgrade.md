@@ -76,7 +76,7 @@ cd /你的/路径/dsh-feishu
 git pull
 ```
 
-link 装没有拷贝步骤，`git pull` 完就是新代码。不用重跑 `setup.sh`，除非 `package.json` 的依赖变了——这次 0.2.0 没加依赖，不用跑。
+link 装没有拷贝步骤，`git pull` 完就是新代码。不用重跑 `setup.sh`，除非 `package.json` 的依赖变了。0.3.0 没加依赖，不用跑。
 
 ## 升级之后
 
@@ -88,7 +88,7 @@ dsh --profile feishu
 # 2. 看启动日志确认版本和模型表
 #    日志里应该有这两行：
 #    [dsh-feishu] models loaded from ...  (或者没有这行，说明走内置 dsf)
-#    [dsh-feishu] prompts v0.1.10 loaded from ...
+#    [dsh-feishu] prompts v0.1.11 loaded from ...
 ```
 
 在飞书里按顺序验这三个，能出东西就是新版在跑：
@@ -102,6 +102,24 @@ dsh --profile feishu
 最省事的一个判据：**`/usage` 有反应**就是升级成功了（0.1.9 根本没这个命令）。
 
 如果 `/status` 还是纯文字，说明跑的还是旧代码——检查是不是重启了另一个 profile，或者 `DSH_HOME` 指到了别的目录。
+
+## 0.2.0 → 0.3.0 要注意的
+
+没有破坏性改动。老的 `models.json`、会话文件、bot 配置都不用改。
+
+升级成功的判据：跑一轮带工具的对话，工具调用收进**一张灰色折叠卡**，不再是一条条蓝色进度行。终局回复仍是绿头 `Done · 别名`。
+
+1. **进度卡换了样子**。一轮一张，里面每行一个工具，绿点完成、蓝点进行中、红点失败。客户端低于 7.20 会提示升级，卡片结构仍能看。
+2. **加急是新能力，默认开着但可以关**。长任务默认 5 分钟结束时加急一次（`DSH_FEISHU_LONG_BUZZ_MS=0` 关闭）。提问卡和审批卡默认 2 分钟没人理就加急一次（`DSH_FEISHU_WAIT_BUZZ_MS=0` 关闭）。要用加急，飞书开放平台给这个应用开 `im:message.urgent`，四个 bot 各自开。没开权限时文本照发，加急那一步失败，不影响对话。
+3. **`send_file` 多了可选的 `text`**。只在 `voice=true` 时有用，飞书会在语音后面再发一条文字。不传行为和 0.2.0 一样。
+4. **`/usage` 卡片多了图**。客户端不认 chart 元素时，数字卡片还在，不会空白。
+5. **回滚**：钉回 0.2.0 的 `2aaecc4`。
+
+```sh
+dsh plugin --profile feishu add github:shoxiy-danny/dsh-feishu#2aaecc4
+```
+
+0.3.0 没有改 `feishu-chats.json` / `feishu-history.json`。
 
 ## 0.1.9 → 0.2.0 要注意的
 

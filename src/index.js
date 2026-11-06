@@ -20,6 +20,7 @@ import { presentResume, resumePageCard, resumePickFailed } from './resume.js'
 import { attachMicroCompact } from './microcompact.js'
 import { attachCmd } from './cmd.js'
 import { collectUsage, formatUsage, parseUsageArg, usageCard } from './usage.js'
+import { chartElements } from './usage-chart.js'
 
 export const name = 'dsh-feishu'
 export const inject = ['agents', 'sessions', 'agentDefaultModel', 'systemPrompt', 'tools', 'attachments']
@@ -170,19 +171,23 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
 
   const cards = createCardStore()
   const goalViews = createGoalViews()
+  // chatKey -> 最近一个说话的真人 open_id，供 buzz_user 和长任务计时提醒定位收件人
+  const senders = new Map()
+  const senderOf = (chatKey) => senders.get(String(chatKey)) || ''
   attachPrompts(ctx)
   attachToolTrim(ctx)
-  attachGuard(ctx, { routeOf, store: cards })
-  attachAsk(ctx, { routeOf, store: cards })
+  attachGuard(ctx, { routeOf, store: cards, senderOf })
+  attachAsk(ctx, { routeOf, store: cards, senderOf })
   attachMicroCompact(ctx)
   attachCmd(ctx, { routeOf, bridge })
-  attachOutbound(ctx, { routeOf })
+  attachOutbound(ctx, { routeOf, senderOf })
 
   attachProgress(ctx, {
     routeOf,
     modelOf: (chatKey) => bridge.selectionOfKey(chatKey),
     windowOf: bridge.windowOf,
     goalOf: (sessionId) => bridge.goalOf(sessionId),
+    senderOf,
   })
   attachGoal(ctx, { routeOf, views: goalViews })
 
@@ -193,6 +198,7 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
       process.stderr.write(
         `[dsh-feishu] inbound ${appId} ${msg.messageType} ${msg.messageId} chat=${msg.chatId}\n`,
       )
+      if (msg.senderId) senders.set(`${appId}::${msg.chatId}`, String(msg.senderId))
       await onInbound({ appId, lark, msg, bridge, inboxRoot, cards, goalViews, attachments })
     }, {
       onCard: (data) => onCardAction({ appId, lark, data, cards, bridge, views: goalViews }),
@@ -209,6 +215,7 @@ async function boot(ctx, { bots, bridge, routeOf, cwd, inboxRoot, cliLark }) {
       process.stderr.write(
         `[dsh-feishu] inbound ${CLI_APP_ID} ${msg.messageType} ${msg.messageId} chat=${msg.chatId}\n`,
       )
+      if (msg.senderId) senders.set(`${CLI_APP_ID}::${msg.chatId}`, String(msg.senderId))
       return onInbound({ appId: CLI_APP_ID, lark: cliLark, msg, bridge, inboxRoot, cards, goalViews, attachments })
     },
     waitIdle: (appId, chatId) => bridge.waitIdle(appId, chatId),
@@ -515,7 +522,7 @@ async function onInbound({ appId, lark, msg, bridge, inboxRoot, cards, goalViews
       return
     }
     const report = collectUsage({ dshHome: process.env.DSH_HOME, window: parsed.window })
-    const reply = { text: formatUsage(report), card: usageCard(report) }
+    const reply = { text: formatUsage(report), card: usageCard(report, { charts: chartElements(report) }) }
     if (appId === CLI_APP_ID) {
       await lark.sendText(msg.chatId, reply.text)
       return

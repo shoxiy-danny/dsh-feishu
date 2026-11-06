@@ -25,8 +25,6 @@ export function formatBytes(n) {
   return `${Math.round(v / 1024)}K`
 }
 
-const SESSION_LOGS = ['session.jsonl.zstd', 'session.jsonl']
-
 export function sessionFileBytes(root, sessionId) {
   const id = String(sessionId || '')
   if (!root || !id) return 0
@@ -44,8 +42,18 @@ export function sessionFileBytes(root, sessionId) {
   return 0
 }
 
+// 会话日志文件名随底座版本变过：session.jsonl.zstd、session.v4.jsonl.zstd。
+// 写死候选名单会在升级后让 /resume 的大小一栏悄悄变空。按形状找，压缩的优先。
+function logFiles(dir) {
+  let names
+  try { names = readdirSync(dir) } catch { return [] }
+  return names
+    .filter((name) => /^session.*\.jsonl(\.zstd)?$/.test(name))
+    .sort((a, b) => Number(b.endsWith('.zstd')) - Number(a.endsWith('.zstd')))
+}
+
 function logBytes(dir) {
-  for (const name of SESSION_LOGS) {
+  for (const name of logFiles(dir)) {
     try {
       const st = statSync(join(dir, name))
       if (st.isFile() && st.size > 0) return st.size

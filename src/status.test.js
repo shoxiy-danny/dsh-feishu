@@ -25,6 +25,24 @@ test('formatBytes', () => {
   assert.equal(formatBytes(-1), '?')
 })
 
+test('sessionFileBytes reads versioned log names', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-sess-'))
+  const dir = join(root, 'sessions', 'proj', 'session-v4')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'session.v4.jsonl.zstd'), Buffer.alloc(1234))
+  writeFileSync(join(dir, 'session.lock'), Buffer.alloc(0))
+  assert.equal(sessionFileBytes(root, 'session-v4'), 1234)
+})
+
+test('sessionFileBytes ignores non-log files', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-sess-'))
+  const dir = join(root, 'sessions', 'proj', 'session-x')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'README.md'), Buffer.alloc(999))
+  writeFileSync(join(dir, 'session.lock'), Buffer.alloc(0))
+  assert.equal(sessionFileBytes(root, 'session-x'), 0)
+})
+
 test('sessionFileBytes stats compressed log', () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-sess-'))
   const dir = join(root, 'sessions', '--home-user--', 'session-abc')

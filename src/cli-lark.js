@@ -43,8 +43,17 @@ export function createCliLark({ emit } = {}) {
     return sendText(chatId, text)
   }
 
-  function progressCard(text) {
-    return { text: String(text ?? '') }
+  function progressCard(input) {
+    if (input && typeof input === 'object') return input
+    return { text: String(input ?? '') }
+  }
+
+  async function buzz(chatId, openId, text) {
+    const body = String(text ?? '').trim()
+    if (!chatId || !openId || !body) return { ok: false, reason: 'missing' }
+    const id = nextId(chatId)
+    push(chatId, { type: 'buzz', id, text: body, openId, at: Date.now() })
+    return { ok: true, messageId: id }
   }
 
   async function sendCard(chatId, card) {
@@ -118,6 +127,7 @@ export function createCliLark({ emit } = {}) {
     sendCard,
     editCard,
     progressCard,
+    buzz,
     react,
     downloadResource,
     sendFile,

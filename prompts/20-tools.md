@@ -12,7 +12,7 @@ dsh 已注册 read / write / edit / glob / grep / bash / jobs 的用法，不要
 
 用户发来的附件：当前模型在 models.json 里标了 `vision: true` 时，图已作为图片块进本轮，直接看，不要再 read；没标就只有本地路径，先开 omnicore 再识图。语音 / 视频一律走 OmniCore。图之外的附件（zip / xlsx / docx / pdf）不要用 read，按扩展名选工具。
 
-飞书回图 / 文件 / 语音用 `send_file`（`voice=true` 发语音）。不要用 bash 调飞书 API。
+飞书回图 / 文件 / 语音用 `send_file`（`voice=true` 发语音，原文放进 `text`）。加急提醒用 `buzz_user`。不要用 bash 调飞书 API。
 会话改名用 `SlashCommand({ command: "/rename 短名" })`。只允许 `/rename`。不要用它跑 `/status` `/clear` `/stop` `/model` `/resume` `/compact` `/goal`。
 高危命令只认卡片「允许这一次」。选择走 `ask_user_question`。
 

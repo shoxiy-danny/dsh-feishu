@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0 — 2026-11-06
+
+Sync with the private build. Default install still ships only `dsf`. Nothing below needs a private model table.
+
+**Progress is one fold-in-place card.** A turn opens one card. Thinking and each tool are a row inside a grey fold. Status changes edit that row, including after the card has closed. The heading is the old progress line (`[dsf-6%] Read...(3)`); when every row has settled it becomes `Done (3)` or `Failed (3)`. Non-zero exit codes count as failure, not only spawn errors. Mid-turn prose goes out as its own message and the next tool batch opens a new card under it, so the fold is not stuck above the answer. The card closes on `turn/end`, not on every idle. The final answer is still the green `Done · alias` card.
+
+**Urgent reminders.** `buzz_user` sends a Feishu urgent message (banner + sound). A turn started by a person that runs longer than `DSH_FEISHU_LONG_BUZZ_MS` (default 5 minutes, `0` to disable) buzzes once when it ends. Ask cards and high-risk approval cards buzz once if nobody answers within `DSH_FEISHU_WAIT_BUZZ_MS` (default 2 minutes). The bot needs `im:message.urgent`. Without it the text still sends and the urgent call fails.
+
+**Voice can carry its transcript.** `send_file` with `voice=true` accepts `text`. Feishu sends the audio, then a text message, so the words are readable when listening is inconvenient.
+
+**`/usage` draws charts.** The usage card adds a daily bar and a model-share pie when the client can render the native chart element. The text form is unchanged.
+
+**Session size follows the log filename.** `/resume` and `/status` look for `session*.jsonl` / `session*.jsonl.zstd` instead of a fixed name, so a harness upgrade that renames the log does not blank the size column.
+
+**Prompts 0.1.11** — short replies by default, voice transcripts, `buzz_user`.
+
 ## 0.2.0 — 2026-10-22
 
 Sync with the private build. Everything below is opt-in through env vars, so a default install still behaves like 0.1.9 with `dsf` only.

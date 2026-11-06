@@ -1,5 +1,8 @@
 const DEFAULT_TTL = 10 * 60 * 1000
 
+// 提问 / 审批卡发出后这么久还没应答，就发一条 buzz。只提醒一次，设 0 关闭。
+const WAIT_BUZZ_MS = 2 * 60_000
+
 export function chatKey(appId, chatId) {
   return `${appId}::${chatId}`
 }
@@ -63,6 +66,22 @@ export function waitCard(store, rec) {
     rec.resolve = resolve
     store.add(rec)
   })
+}
+
+// 卡片还在等应答时，到点补一条 buzz。点了 / 超时 / 取消后 store 里没有 rec，就不再提醒。
+// 返回停止函数，调用方在 finally 里清掉。DSH_FEISHU_WAIT_BUZZ_MS=0 可关。
+export function armWaitBuzz({ store, rec, openId, text }) {
+  const waitMs = Number(process.env.DSH_FEISHU_WAIT_BUZZ_MS ?? WAIT_BUZZ_MS)
+  if (!waitMs || !rec?.lark?.buzz || !openId) return () => {}
+  const timer = setTimeout(() => {
+    if (!store.get(rec.id)) return
+    const body = String(text || '').trim() || '还在等你应答'
+    void rec.lark.buzz(rec.chatId, openId, body).catch((err) => {
+      process.stderr.write(`[dsh-feishu] wait buzz failed: ${err}\n`)
+    })
+  }, waitMs)
+  if (timer.unref) timer.unref()
+  return () => clearTimeout(timer)
 }
 
 function clip(text, max = 800) {

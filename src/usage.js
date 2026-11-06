@@ -181,7 +181,7 @@ export function formatUsage(report) {
   return lines.join('\n')
 }
 
-export function usageCard(report) {
+export function usageCard(report, opts = {}) {
   const label = report.window?.label || '近7天'
   const t = report.total || blankRow()
   const grand = tokensOf(t)
@@ -197,6 +197,11 @@ export function usageCard(report) {
       { label: '缓存命中', value: formatCache(t.cacheRead, t.input), hint: formatTok(t.cacheRead), color: 'green' },
     ], '4px 0 0 0'),
   ]
+  const charts = opts.charts || []
+  if (charts.length) {
+    elements.push({ tag: 'hr' })
+    for (const chart of charts) elements.push(chart)
+  }
   if (!report.models?.length) {
     elements.push({ tag: 'markdown', content: `${label}没有用量记录` })
   } else {

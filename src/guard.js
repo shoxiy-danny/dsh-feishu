@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, resolve } from 'node:path'
-import { approvalCard, lockedCard, waitCard } from './cards.js'
+import { approvalCard, armWaitBuzz, lockedCard, waitCard } from './cards.js'
 
 const DENY =
   '高危命令已拦，没执行。点卡片「允许这一次」才会跑。打字同意不算批准。改单个文件 / skill 不用审批。'
@@ -183,7 +183,7 @@ export function classifyDanger(name, args) {
   return null
 }
 
-export function attachGuard(ctx, { routeOf, store } = {}) {
+export function attachGuard(ctx, { routeOf, store, senderOf } = {}) {
   if (process.env.DSH_FEISHU_GUARD === '0') {
     process.stderr.write('[dsh-feishu] high-risk bash guard off\n')
     return
@@ -230,9 +230,16 @@ export function attachGuard(ctx, { routeOf, store } = {}) {
     const onAbort = () => store.settle(id, { abort: true })
     exec.signal?.addEventListener('abort', onAbort, { once: true })
     let result
+    const stopBuzz = armWaitBuzz({
+      store,
+      rec,
+      openId: senderOf?.(`${route.appId}::${route.chatId}`) || '',
+      text: `高危操作在等你确认：${kind}`,
+    })
     try {
       result = await waitCard(store, rec)
     } finally {
+      stopBuzz()
       exec.signal?.removeEventListener('abort', onAbort)
     }
 

@@ -36,7 +36,7 @@
 1. **长在飞书里** — harness 的面就是飞书，不是遥控网页
 2. **Goal 卡片** — 设定、改目标、暂停、恢复、清除，点卡片就能做；重启不偷着续
 3. **一进程多 bot** — 2～3 个飞书身份共用一套 Agent，同一条 session 不能两头同时握
-4. **会变的进度头** — `[dsf-23% G1/3] Using bash...(2)`，不是「正在思考…」四个字一直挂着
+4. **一轮一张进度卡** — 工具收进灰色折叠，标题仍是 `[dsf-23% G1/3] Bash...(2)`，跑完定格 `Done (2)`
 
 <p align="center">
   <img src="assets/cards.png" width="960" alt="Goal card, approval card, ask card">
@@ -207,7 +207,7 @@ chmod +x scripts/*.sh scripts/dsh-feishu-cli
 | 文件 | 内容 |
 |------|------|
 | [docs/install.md](docs/install.md) | 从零装一遍：前置、飞书应用、启动、验收、常见失败 |
-| [docs/upgrade.md](docs/upgrade.md) | **已经在用的人看这个**：确认装法、升级、0.1.9 → 0.2.0 迁移、回滚 |
+| [docs/upgrade.md](docs/upgrade.md) | **已经在用的人看这个**：确认装法、升级、0.2.0 → 0.3.0、回滚 |
 | [docs/env.md](docs/env.md) | 全部环境变量一张表，标了默认值和「不设会怎样」 |
 | [docs/handbook.md](docs/handbook.md) | 斜杠命令、Goal 卡片、模型、多 bot、MCP、假 bot |
 | [docs/feishu-setup.md](docs/feishu-setup.md) | 飞书应用、权限、长连接（逐步截图级） |
@@ -378,7 +378,7 @@ Not for: 30-second QR setup on a personal PC; people who still want the official
 | File | What |
 |------|------|
 | [docs/install.md](docs/install.md) | From zero: prerequisites, Feishu app, start, acceptance, failures |
-| [docs/upgrade.md](docs/upgrade.md) | **Already running it? Start here.** Detect install type, upgrade, 0.1.9 → 0.2.0, rollback |
+| [docs/upgrade.md](docs/upgrade.md) | **Already running it? Start here.** Detect install type, upgrade, 0.2.0 → 0.3.0, rollback |
 | [docs/env.md](docs/env.md) | Every environment variable, default, and what happens if unset |
 | [docs/handbook.md](docs/handbook.md) | Commands, Goal card, models, multi-bot, MCP, fake CLI bot |
 | [docs/feishu-setup.md](docs/feishu-setup.md) | Feishu app, scopes, long connection |

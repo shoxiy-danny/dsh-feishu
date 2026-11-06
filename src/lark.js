@@ -76,13 +76,90 @@ export function createLark(creds = process.env) {
     return lastId
   }
 
-  function progressCard(text) {
-    return {
+  // 加急提醒：只能加急机器人自己发的消息，所以先发一条文本再对它 urgent_app。
+  // 失败不抛，返回 { ok, reason } 由调用方决定怎么处理。
+  // 开放平台需要 im:message.urgent 权限，没开时 urgent 会失败、文本仍会发出。
+  async function buzz(chatId, openId, text) {
+    const body = String(text ?? '').trim()
+    if (!chatId || !openId) return { ok: false, reason: 'missing chatId/openId' }
+    if (!body) return { ok: false, reason: 'empty text' }
+    let messageId = ''
+    try {
+      const resp = await client.im.message.create({
+        params: { receive_id_type: 'chat_id' },
+        data: { receive_id: chatId, msg_type: 'text', content: JSON.stringify({ text: body }) },
+      })
+      messageId = resp?.data?.message_id ?? resp?.message_id ?? ''
+      if (messageId) noteSeen(messageId)
+    } catch (err) {
+      const data = err?.response?.data
+      return { ok: false, reason: `send failed: ${data?.code || ''} ${data?.msg || err?.message || err}` }
+    }
+    if (!messageId) return { ok: false, reason: 'no message_id' }
+    try {
+      const resp = await client.im.message.urgentApp({
+        path: { message_id: messageId },
+        params: { user_id_type: 'open_id' },
+        data: { user_id_list: [openId] },
+      })
+      const invalid = resp?.data?.invalid_user_id_list ?? []
+      if (invalid.length > 0) return { ok: false, reason: `invalid users: ${invalid.join(',')}`, messageId }
+      return { ok: true, messageId }
+    } catch (err) {
+      const data = err?.response?.data
+      return { ok: false, reason: `urgent failed: ${data?.code || ''} ${data?.msg || err?.message || err}`, messageId }
+    }
+  }
+
+  // 工具折叠面板。浅灰底是为了把工具区压到正文后面去。
+  function toolPanel({ label = '', lines = [], element_id = 'tool_panel' } = {}) {
+    const panel = {
+      tag: 'collapsible_panel',
+      expanded: false,
+      background_color: 'grey-50',
+      border: { color: 'grey', corner_radius: '5px' },
+      vertical_spacing: '4px',
+      padding: '8px 8px 8px 8px',
+      header: {
+        title: { tag: 'markdown', content: `**${label}**` },
+        vertical_align: 'center',
+        icon: { tag: 'standard_icon', token: 'down-small-ccm_outlined', size: '16px 16px' },
+        icon_position: 'right',
+        icon_expanded_angle: -180,
+      },
+      elements: lines.map((line) => ({ tag: 'markdown', content: line })),
+    }
+    if (element_id) panel.element_id = element_id
+    return panel
+  }
+
+  // 进度卡：一张卡从开到收，内容靠 editCard 原地改。标题就是折叠面板的标题。
+  // 兼容旧调用：只传一段文字时仍出一行进度。
+  function progressCard(input) {
+    if (typeof input === 'string' || input == null) {
+      const text = String(input ?? '')
+      return {
+        schema: '2.0',
+        config: { update_multi: true },
+        header: { title: { tag: 'plain_text', content: '' }, template: 'blue' },
+        body: { elements: [{ tag: 'markdown', content: `- ${text}` }] },
+      }
+    }
+    const { title = '', text = '', lines = [], status = '', suffix = '', label = '' } = input
+    const elements = []
+    if (text) elements.push({ tag: 'markdown', content: text })
+    if (lines.length > 0) {
+      const head = [label || `Done (${lines.length})`, suffix].filter(Boolean).join(' · ')
+      elements.push(toolPanel({ label: head, lines }))
+    }
+    if (status) elements.push({ tag: 'markdown', content: status })
+    const card = {
       schema: '2.0',
       config: { update_multi: true },
-      header: { title: { tag: 'plain_text', content: '' }, template: 'blue' },
-      body: { elements: [{ tag: 'markdown', content: `- ${text}` }] },
+      body: { elements },
     }
+    if (title) card.header = { title: { tag: 'plain_text', content: title }, template: 'blue' }
+    return card
   }
 
   async function sendCard(chatId, card) {
@@ -204,6 +281,8 @@ export function createLark(creds = process.env) {
 
   async function sendFile(chatId, filePath, opts = {}) {
     const voice = Boolean(opts.voice)
+    // 语音附带的原文。飞书做成「语音 + 一条文字」两条消息：戴耳机听语音，不方便时直接读文字。
+    const caption = String(opts.text || '').trim()
     const fileName = basename(filePath)
     const ext = extname(filePath).toLowerCase()
     const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']
@@ -245,7 +324,14 @@ export function createLark(creds = process.env) {
       if (uploadPath !== filePath) {
         try { unlinkSync(uploadPath) } catch {}
       }
-      return `语音已发送 (${fileName})`
+      if (caption) {
+        try {
+          await sendText(chatId, caption)
+        } catch (err) {
+          process.stderr.write(`[dsh-feishu] 语音文字发送失败: ${err?.message || err}\n`)
+        }
+      }
+      return caption ? `语音已发送并附文字 (${fileName})` : `语音已发送 (${fileName})`
     }
 
     if (imageExts.includes(ext)) {
@@ -292,7 +378,7 @@ export function createLark(creds = process.env) {
     return `文件已发送 (${fileName})`
   }
 
-  return { appId, sendText, sendFinal, sendCard, editCard, progressCard, react, downloadResource, sendFile, start }
+  return { appId, sendText, sendFinal, sendCard, editCard, progressCard, react, buzz, downloadResource, sendFile, start }
 }
 
 // 终局卡：green 头 + Done · 别名，正文走同一条 markdown 渲染管线
